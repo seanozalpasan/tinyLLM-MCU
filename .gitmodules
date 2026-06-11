@@ -1,0 +1,6 @@
+[submodule "refs/mars-original"]
+	path = refs/mars-original
+	url = https://github.com/kwagu14/ids-implementation.git
+[submodule "refs/llama2.c"]
+	path = refs/llama2.c
+	url = https://github.com/karpathy/llama2.c.git
