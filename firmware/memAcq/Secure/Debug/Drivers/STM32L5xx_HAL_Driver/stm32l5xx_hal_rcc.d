@@ -30,6 +30,7 @@ Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_rcc.o: \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_i2c_ex.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_icache.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_iwdg.h \
+ ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_ospi.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_pwr.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_pwr_ex.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_uart.h \
@@ -65,6 +66,7 @@ Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_rcc.o: \
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_i2c_ex.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_icache.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_iwdg.h:
+../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_ospi.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_pwr.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_pwr_ex.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_uart.h:
