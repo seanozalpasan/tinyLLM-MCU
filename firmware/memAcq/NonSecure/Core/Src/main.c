@@ -24,6 +24,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include <stdio.h>   /* snprintf for the OSPI XIP report */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,6 +111,33 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 
+  /* ---- Week 1 Phase 3: non-secure read-back of the OSPI XIP region ----
+     The secure world already erased/programmed the pattern and left OCTOSPI1 in
+     memory-mapped mode, and dropped a non-secure watermark over 0x90000000.
+     This is the definitive proof of the path the inference engine will use:
+     a plain non-secure load from external XIP flash. Reported via the secure
+     UART veneer (USART1 is secure-attributed). */
+  {
+    volatile uint32_t *xip = (volatile uint32_t *)0x90000000UL;
+    const uint32_t expect[4] = { 0xDEADBEEFUL, 0xCAFEBABEUL, 0x12345678UL, 0xA5A5A5A5UL };
+    uint32_t got[4];
+    char ospi_msg[128];
+    int ospi_ok = 1;
+    for (int i = 0; i < 4; i++)
+    {
+      got[i] = xip[i];
+      if (got[i] != expect[i]) { ospi_ok = 0; }
+    }
+    snprintf(ospi_msg, sizeof(ospi_msg),
+             "[NS] read @0x90000000: 0x%08lX 0x%08lX 0x%08lX 0x%08lX -> %s\r\n",
+             (unsigned long)got[0], (unsigned long)got[1],
+             (unsigned long)got[2], (unsigned long)got[3],
+             ospi_ok ? "PASS" : "FAIL");
+    SECURE_print_Log(ospi_msg);
+  }
+
+#if 0  /* Week 1: full memory dump temporarily disabled so the OSPI XIP proof
+          output is easy to read. Re-enable by flipping this back to #if 1. */
   /* Step 3 */
     /* Provide non-secure data to secure */
     /* through secure DMA channels via Non-Secure Callable secure service */
@@ -188,6 +216,7 @@ int main(void)
 	while (transferCompleteDetected == 0);
 
   }
+#endif /* memory dump disabled for Week 1 OSPI proof */
 
   /* USER CODE END 2 */
 
