@@ -1,0 +1,5 @@
+C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_wwdg.c:176:19:HAL_WWDG_Init	2
+C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_wwdg.c:230:13:HAL_WWDG_MspInit	1
+C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_wwdg.c:343:19:HAL_WWDG_Refresh	1
+C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_wwdg.c:366:6:HAL_WWDG_IRQHandler	3
+C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_wwdg.c:395:13:HAL_WWDG_EarlyWakeupCallback	1
