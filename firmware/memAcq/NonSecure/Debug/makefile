@@ -60,7 +60,7 @@ all: main-build
 main-build: My_Mem_to_Mem_Example_NonSecure.elf secondary-outputs
 
 dependents:
-	-cd C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Secure/Debug && $(MAKE) clean all
+	-cd C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Secure/Debug && $(MAKE) all
 
 # Tool invocations
 My_Mem_to_Mem_Example_NonSecure.elf My_Mem_to_Mem_Example_NonSecure.map: $(OBJS) $(USER_OBJS) C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Secure/Debug/My_Mem_to_Mem_Example_Secure.elf C:\Users\sean\seanprojects\tinyLLM-MCU\firmware\memAcq\NonSecure\STM32L562QEIXQ_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)

@@ -21,5 +21,7 @@
 "./Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_pwr_ex.o"
 "./Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_rcc.o"
 "./Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_rcc_ex.o"
+"./Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_spi.o"
+"./Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_spi_ex.o"
 "./Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_tim.o"
 "./Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_tim_ex.o"

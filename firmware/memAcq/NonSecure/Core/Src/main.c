@@ -35,6 +35,21 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+/* ---- Test-bed A: dummy outbound-telemetry frame (STM32 SPI3 master -> ESP32 slave) ---- */
+#define TELE_MAGIC0     0xA5u
+#define TELE_MAGIC1     0x5Au
+#define TELE_FRAME_LEN  9u
+
+/* SPI3 chip-select: ARD D10 / PE0 (software NSS, driven as GPIO) */
+#define TELE_CS_PORT    GPIOE
+#define TELE_CS_PIN     GPIO_PIN_0
+
+/* Slave-ready handshake from ESP32: ARD D2 / PD11 (input).
+   Gating is deferred for now -- the pin is read + printed but NOT used to gate
+   transmits; we verify it later with the ESP32 driving the line. */
+#define TELE_HS_PORT    GPIOD
+#define TELE_HS_PIN     GPIO_PIN_11
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,6 +59,11 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
+
+/* Test-bed A SPI3 master state */
+SPI_HandleTypeDef hspi3;
+static uint8_t  tele_frame[TELE_FRAME_LEN];
+static uint32_t tele_seq = 0;
 
 //this is the data that we'll send to the secure environment
 uint32_t aSRC_Const_Buffer[32] =
@@ -73,6 +93,9 @@ void SystemClock_Config(void);
 //static void NonSecure_To_NonSecure_Mem_Transfer(uint32_t* src, uint32_t* dest, uint32_t size);
 
 /* USER CODE BEGIN PFP */
+static void MX_SPI3_Init(void);
+static void Workload_GPIO_Init(void);
+static void Tele_BuildFrame(uint8_t *buf, uint32_t seq, uint16_t value);
 static void NonSecureSecureTransferCompleteCallback(DMA_HandleTypeDef *hdma_memtomem_dma1_channelx);
 static void NonSecureNonSecureTransferCompleteCallback(DMA_HandleTypeDef *hdma_memtomem_dma1_channelx);
 /* USER CODE END PFP */
@@ -218,6 +241,11 @@ int main(void)
   }
 #endif /* memory dump disabled for Week 1 OSPI proof */
 
+  /* ---- Test-bed A: bring up the NonSecure SPI3 master + dummy telemetry ---- */
+  Workload_GPIO_Init();
+  MX_SPI3_Init();
+  SECURE_print_Log("[NS] Test-bed A: SPI3 master init done\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -227,6 +255,31 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    {
+      /* Handshake deferred: transmit every cycle regardless of HS. The pin is still
+         read + printed so we can watch it move once the ESP32 drives it; re-enable
+         gating after the ESP32 side is verified. */
+      GPIO_PinState hs = HAL_GPIO_ReadPin(TELE_HS_PORT, TELE_HS_PIN);
+      uint16_t value   = (uint16_t)(1000u + (tele_seq % 50u));
+      HAL_StatusTypeDef st;
+      char msg[96];
+
+      Tele_BuildFrame(tele_frame, tele_seq, value);
+
+      HAL_GPIO_WritePin(TELE_CS_PORT, TELE_CS_PIN, GPIO_PIN_RESET);   /* CS low  */
+      st = HAL_SPI_Transmit(&hspi3, tele_frame, TELE_FRAME_LEN, 100u);
+      /* HAL_SPI_Transmit waits for BSY to clear (master end-of-transaction) before
+         returning, so the last bit is already shifted out -- safe to deassert CS. */
+      HAL_GPIO_WritePin(TELE_CS_PORT, TELE_CS_PIN, GPIO_PIN_SET);     /* CS high */
+
+      snprintf(msg, sizeof(msg), "[NS] HS=%d seq=%lu val=%u tx=%s\r\n",
+               (hs == GPIO_PIN_SET) ? 1 : 0,
+               (unsigned long)tele_seq, (unsigned)value,
+               (st == HAL_OK) ? "OK" : "ERR");
+      SECURE_print_Log(msg);
+      tele_seq++;
+      HAL_Delay(1000u);
+    }
   }
   /* USER CODE END 3 */
 }
@@ -363,6 +416,76 @@ static void NonSecureNonSecureTransferCompleteCallback(DMA_HandleTypeDef *hdma_m
 
 
 /* USER CODE BEGIN 4 */
+
+/**
+  * @brief  SPI3 master init -- Test-bed A outbound telemetry.
+  *         Mode 0 (CPOL=0/CPHA=0), 8-bit, MSB-first, software NSS,
+  *         ~1.72 MHz (PCLK1 110 MHz / 64). GPIO/clocks are in HAL_SPI_MspInit().
+  */
+static void MX_SPI3_Init(void)
+{
+  hspi3.Instance               = SPI3;
+  hspi3.Init.Mode              = SPI_MODE_MASTER;
+  hspi3.Init.Direction         = SPI_DIRECTION_2LINES;
+  hspi3.Init.DataSize          = SPI_DATASIZE_8BIT;
+  hspi3.Init.CLKPolarity       = SPI_POLARITY_LOW;          /* mode 0 */
+  hspi3.Init.CLKPhase          = SPI_PHASE_1EDGE;           /* mode 0 */
+  hspi3.Init.NSS               = SPI_NSS_SOFT;              /* CS = GPIO PE0 */
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;  /* 110 MHz / 64 ~ 1.72 MHz */
+  hspi3.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+  hspi3.Init.TIMode            = SPI_TIMODE_DISABLE;
+  hspi3.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+  hspi3.Init.CRCPolynomial     = 7;
+  hspi3.Init.CRCLength         = SPI_CRC_LENGTH_DATASIZE;
+  hspi3.Init.NSSPMode          = SPI_NSS_PULSE_DISABLE;
+  if (HAL_SPI_Init(&hspi3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief  Chip-select (PE0) + slave-ready handshake (PD11) GPIO.
+  *         CS idles high; the handshake is an input pulled low, so the loop
+  *         reports "waiting" until the ESP32 drives it high.
+  */
+static void Workload_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  __HAL_RCC_GPIOE_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+
+  HAL_GPIO_WritePin(TELE_CS_PORT, TELE_CS_PIN, GPIO_PIN_SET);   /* CS idle high */
+  GPIO_InitStruct.Pin   = TELE_CS_PIN;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(TELE_CS_PORT, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin   = TELE_HS_PIN;
+  GPIO_InitStruct.Mode  = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
+  HAL_GPIO_Init(TELE_HS_PORT, &GPIO_InitStruct);
+}
+
+/**
+  * @brief  Build a 9-byte dummy telemetry frame:
+  *         [0]=0xA5 [1]=0x5A [2..5]=seq (LE) [6..7]=value (LE) [8]=XOR checksum.
+  */
+static void Tele_BuildFrame(uint8_t *buf, uint32_t seq, uint16_t value)
+{
+  buf[0] = TELE_MAGIC0;
+  buf[1] = TELE_MAGIC1;
+  buf[2] = (uint8_t)(seq         & 0xFFu);
+  buf[3] = (uint8_t)((seq >> 8)  & 0xFFu);
+  buf[4] = (uint8_t)((seq >> 16) & 0xFFu);
+  buf[5] = (uint8_t)((seq >> 24) & 0xFFu);
+  buf[6] = (uint8_t)(value        & 0xFFu);
+  buf[7] = (uint8_t)((value >> 8) & 0xFFu);
+  buf[8] = (uint8_t)(buf[0] ^ buf[1] ^ buf[2] ^ buf[3] ^
+                     buf[4] ^ buf[5] ^ buf[6] ^ buf[7]);
+}
 
 /* USER CODE END 4 */
 

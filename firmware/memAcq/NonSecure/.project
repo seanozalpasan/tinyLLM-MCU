@@ -107,6 +107,16 @@
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_rcc.c</locationURI>
 		</link>
 		<link>
+			<name>Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_spi.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_spi.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_spi_ex.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_spi_ex.c</locationURI>
+		</link>
+		<link>
 			<name>Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_rcc_ex.c</name>
 			<type>1</type>
 			<locationURI>PARENT-1-PROJECT_LOC/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_rcc_ex.c</locationURI>

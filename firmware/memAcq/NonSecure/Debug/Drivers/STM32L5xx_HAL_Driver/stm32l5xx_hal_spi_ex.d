@@ -1,4 +1,5 @@
-Core/Src/stm32l5xx_it.o: ../Core/Src/stm32l5xx_it.c ../Core/Inc/main.h \
+Drivers/STM32L5xx_HAL_Driver/stm32l5xx_hal_spi_ex.o: \
+ C:/Users/sean/seanprojects/tinyLLM-MCU/firmware/memAcq/Drivers/STM32L5xx_HAL_Driver/Src/stm32l5xx_hal_spi_ex.c \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal.h \
  ../Core/Inc/stm32l5xx_hal_conf.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_rcc.h \
@@ -28,9 +29,7 @@ Core/Src/stm32l5xx_it.o: ../Core/Src/stm32l5xx_it.c ../Core/Inc/main.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_pwr.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_pwr_ex.h \
  ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_spi.h \
- ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_spi_ex.h \
- ../../Secure_nsclib/secure_nsc.h ../Core/Inc/stm32l5xx_it.h
-../Core/Inc/main.h:
+ ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_spi_ex.h
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal.h:
 ../Core/Inc/stm32l5xx_hal_conf.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_rcc.h:
@@ -61,5 +60,3 @@ Core/Src/stm32l5xx_it.o: ../Core/Src/stm32l5xx_it.c ../Core/Inc/main.h \
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_pwr_ex.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_spi.h:
 ../../Drivers/STM32L5xx_HAL_Driver/Inc/stm32l5xx_hal_spi_ex.h:
-../../Secure_nsclib/secure_nsc.h:
-../Core/Inc/stm32l5xx_it.h:
