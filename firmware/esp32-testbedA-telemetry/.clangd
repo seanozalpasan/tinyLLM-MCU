@@ -1,0 +1,14 @@
+# clangd IntelliSense config (we're on VSCodium, so Microsoft's C/C++ engine
+# isn't available — clangd is our analyzer). PlatformIO builds this project with
+# xtensa-esp32-elf-gcc, whose flags and system headers clang doesn't share, so:
+#   * Remove drops the GCC/Xtensa-only flags clang rejects ("Unknown argument").
+#   * Compiler points clangd at the Xtensa GCC so it can discover the toolchain's
+#     system headers (fixes "'stdio.h' file not found" and the Arduino/WiFi
+#     cascade). The driver must also be whitelisted via --query-driver in
+#     .vscode/settings.json.
+# This affects ONLY analysis/squiggles — the real build uses compile_commands.json.
+CompileFlags:
+  Compiler: C:/Users/sean/.platformio/packages/toolchain-xtensa-esp32/bin/xtensa-esp32-elf-gcc.exe
+  Remove:
+    - -m*
+    - -f*
