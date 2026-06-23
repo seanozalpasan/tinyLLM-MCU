@@ -77,6 +77,7 @@
 #define HAL_PWR_MODULE_ENABLED
 #define HAL_CORTEX_MODULE_ENABLED
 #define HAL_ICACHE_MODULE_ENABLED
+#define HAL_SPI_MODULE_ENABLED
 
 /* ########################## Oscillator Values adaptation ####################*/
 /**
