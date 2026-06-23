@@ -601,6 +601,23 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_NSEC);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* ---- Test-bed A: release the SPI3 / telemetry pins to the NonSecure world ----
+     STM32L5 resets EVERY GPIO pin to secure; a NonSecure write to a secure pin's
+     MODE/AF/ODR is silently RAZ/WI (ignored). The workload SPI3 path runs NonSecure
+     by design, so its pins must be granted NSEC here -- SECCFGR is writable only from
+     the secure world. The port clock must be on before touching SECCFGR. */
+  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
+  HAL_GPIO_ConfigPinAttributes(GPIOE, GPIO_PIN_0,  GPIO_PIN_NSEC);   /* PE0  ARD-D10 CS (Arduino)        */
+  HAL_GPIO_ConfigPinAttributes(GPIOD, GPIO_PIN_11, GPIO_PIN_NSEC);   /* PD11 ARD-D2  slave-ready HS in   */
+  HAL_GPIO_ConfigPinAttributes(GPIOB,
+                               GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_13,
+                               GPIO_PIN_NSEC);                        /* PB4 MISO, PB5 MOSI, PB13 STMod+ CS */
+  HAL_GPIO_ConfigPinAttributes(GPIOF, GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_NSEC); /* PF11/PF12 SPI-mux select */
+  HAL_GPIO_ConfigPinAttributes(GPIOG, GPIO_PIN_9,  GPIO_PIN_NSEC);   /* PG9  SCK (also drives LD1)        */
+  HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_10|GPIO_PIN_11, GPIO_PIN_NSEC); /* PC10 USART3_TX, PC11 USART3_RX (mikroBUS UART) */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
