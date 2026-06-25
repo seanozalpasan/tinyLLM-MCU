@@ -57,7 +57,6 @@
 /* External variables --------------------------------------------------------*/
 
 /* USER CODE BEGIN EV */
-extern DMA_HandleTypeDef hdma_memtomem_dma1_channel4;
 /* USER CODE END EV */
 
 /******************************************************************************/

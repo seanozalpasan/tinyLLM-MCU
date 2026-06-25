@@ -32,14 +32,12 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-/* Non-secure Vector table to jump to (internal Flash Bank2 here)             */
-/* Caution: address must correspond to non-secure internal Flash where is     */
-/*          mapped in the non-secure vector table                             */
+/* Non-secure vector table = start of NS internal flash (bank 2). Must match the
+   NS app's link address or the jump-to-non-secure lands nowhere. */
 #define VTOR_TABLE_NS_START_ADDR  0x08040000UL
 
-/* ---- Week 1 Phase 3: OSPI XIP proof (Macronix MX25LM51245G on OCTOSPI1) ---- */
-/* Command set + timings copied verbatim from the ST OSPI_NOR_MemoryMapped      */
-/* example (STM32Cube_FW_L5 V1.5.0) so we reuse a known-good init sequence.     */
+/* OSPI XIP: Macronix MX25LM51245G on OCTOSPI1. Command set + timings are the ST
+   OSPI_NOR_MemoryMapped example (Cube_FW_L5 V1.5.0) -- a known-good sequence; don't hand-tune. */
 /* Flash commands (octal) */
 #define OCTAL_IO_READ_CMD           0xEC13
 #define OCTAL_PAGE_PROG_CMD         0x12ED
@@ -74,11 +72,8 @@
 #define OCTAL_RESET_MEMORY_CMD      0x9966
 #define MEMORY_RESET_MAX_DELAY      100   /* ms; reset recovery worst case (reset during erase) */
 
-/* ---- Build switch: OSPI self-test ----
-   1 = run the destructive erase/program/verify self-test at boot (Week 1 proof).
-   0 = NON-destructive path only: init + memory-mapped READ. Flip to 0 in W5
-       once real model weights live in OSPI flash, or the boot path will erase
-       them on every reset. */
+/* 1 = destructive erase/program/verify self-test at boot.  0 = init + memory-mapped READ only.
+   GOTCHA: flip to 0 once real weights live in OSPI flash, or every boot erases them. */
 #define OSPI_XIP_SELFTEST  1
 
 /* USER CODE END PD */
@@ -92,16 +87,13 @@
 
 UART_HandleTypeDef huart1;
 
-//The original mem to mem example used three channels in secure to handle secure-to-secure and secure-to-non-secure transfers as well
-//here, I'm just using channel three for non-secure to secure transfer
-DMA_HandleTypeDef hdma_memtomem_dma1_channel3;
-//this channel is used for non-secure to non-secure transfer
-DMA_HandleTypeDef hdma_memtomem_dma1_channel2;
+DMA_HandleTypeDef hdma_memtomem_dma1_channel3;  /* non-secure -> secure transfer */
+DMA_HandleTypeDef hdma_memtomem_dma1_channel2;  /* non-secure -> non-secure transfer */
 
 /* USER CODE BEGIN PV */
 
-//this is a copy of the buffer that exists in the non-secure environment; the SECURE_DATA_Last_Buffer_Compare function
-//uses it to check for successful nonsecure to secure memory transfer.
+/* Secure reference copy of the non-secure buffer; SECURE_DATA_Last_Buffer_Compare
+   checks transfers against it. */
 const uint32_t aSRC_SEC_ROM_Buffer[BUFFER_SIZE] =
 {
   0x01020304, 0x05060708, 0x090A0B0C, 0x0D0E0F10,
@@ -117,10 +109,9 @@ const uint32_t aSRC_SEC_ROM_Buffer[BUFFER_SIZE] =
 //this is the buffer that non-secure will copy to; it holds 1024 bytes (256 words) of memory
 uint32_t SEC_Mem_Buffer[BUFFER_SIZE];
 
-/* Week 1 Phase 3: OSPI XIP state */
 OSPI_HandleTypeDef hospi1;
 #if OSPI_XIP_SELFTEST
-/* Known pattern programmed into the external flash and checked from both worlds */
+/* Known pattern programmed into external flash, then verified from both worlds. */
 static const uint32_t OSPI_Test_Pattern[4] =
 {
   0xDEADBEEFUL, 0xCAFEBABEUL, 0x12345678UL, 0xA5A5A5A5UL
@@ -138,9 +129,8 @@ static void MX_ICACHE_Init(void);
 static void MX_GTZC_S_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
-/* Week 1 Phase 3: OSPI XIP. Reusable bring-up (OSPI_Init + OSPI_EnableMemoryMapped)
-   is kept separate from the destructive self-test so the latter can be compiled
-   out (OSPI_XIP_SELFTEST) once weights live in flash. */
+/* OSPI XIP. Reusable bring-up (OSPI_Init + OSPI_EnableMemoryMapped) is kept separate
+   from the destructive self-test so the latter compiles out (OSPI_XIP_SELFTEST 0). */
 static void MX_OCTOSPI1_Init(void);
 static void OSPI_WriteEnable(OSPI_HandleTypeDef *hospi);
 static void OSPI_AutoPollingMemReady(OSPI_HandleTypeDef *hospi);
@@ -199,9 +189,8 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 
-  /* Week 1 Phase 3: bring up OSPI XIP at 0x90000000. Runs before HAL_SuspendTick()
-     below because it uses HAL_Delay(). Leaves OCTOSPI1 in memory-mapped mode so the
-     non-secure world can read it after the jump. */
+  /* Bring up OSPI XIP at 0x90000000. Must run before HAL_SuspendTick() (it uses HAL_Delay).
+     Leaves OCTOSPI1 in memory-mapped mode so the non-secure world can read it after the jump. */
   printf("\r\n[S ] OSPI XIP: bringing up OCTOSPI1 (init + flash reset + octal mode)...\r\n");
   OSPI_Init();
 #if OSPI_XIP_SELFTEST
@@ -376,15 +365,11 @@ static void MX_GTZC_S_Init(void)
   }
   /* USER CODE BEGIN GTZC_S_Init 2 */
 
-  /* Week 1 Phase 3: open the OCTOSPI1 memory-mapped region to non-secure access.
-     External memory defaults to SECURE in GTZC. SAU region 4 already marks
-     0x60000000-0x9FFFFFFF non-secure, so every access to 0x90000000 (even from
-     secure code) is issued as a NON-secure bus transaction and would be blocked
-     until we drop a non-secure watermark here. This driver's MPCWM writes the
-     non-secure watermark register (NSWMR): the configured area becomes
-     non-secure, the remainder stays secure. One 128 KB granule from offset 0
-     covers our 4 KB test sector. W5 TODO: grow Length to span the whole model
-     weight blob (still 128 KB-granular) so the engine can XIP all of it. */
+  /* Open OCTOSPI1 to non-secure. External memory defaults to SECURE in GTZC, but SAU region 4
+     marks 0x60000000-0x9FFFFFFF non-secure -- so every access to 0x90000000 (even from secure
+     code) is a non-secure bus transaction, blocked until we drop a non-secure watermark (MPCWM)
+     here. One 128 KB granule from offset 0 covers the 4 KB test sector; grow Length to span the
+     full weight blob (128 KB-granular) before XIP'ing real weights. */
   {
     MPCWM_ConfigTypeDef MPCWM_OSPI_Desc = {0};
     MPCWM_OSPI_Desc.AreaId = GTZC_TZSC_MPCWM_ID1;
@@ -481,11 +466,8 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
-  * Configure DMA for memory to memory transfers
-  *   hdma_memtomem_dma1_channel1
-  *   hdma_memtomem_dma1_channel2
-  *   hdma_memtomem_dma1_channel3
+  * Enable the DMA controller clock and configure the mem-to-mem channels:
+  *   channel2 (NS -> NS), channel3 (NS -> secure).
   */
 static void MX_DMA_Init(void)
 {
@@ -601,35 +583,33 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_14|GPIO_PIN_15, GPIO_PIN_NSEC);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
-  /* ---- Test-bed A: release the SPI3 / telemetry pins to the NonSecure world ----
-     STM32L5 resets EVERY GPIO pin to secure; a NonSecure write to a secure pin's
-     MODE/AF/ODR is silently RAZ/WI (ignored). The workload SPI3 path runs NonSecure
-     by design, so its pins must be granted NSEC here -- SECCFGR is writable only from
-     the secure world. The port clock must be on before touching SECCFGR. */
+  /* ---- Test-bed A: release the telemetry pins to the NonSecure world ----
+     GOTCHA: STM32L5 resets EVERY GPIO pin to secure, and a NonSecure write to a secure
+     pin's MODE/AF/ODR is silently RAZ/WI. The workload runs NonSecure, so its pins must be
+     granted NSEC here -- SECCFGR is writable only from the secure side, and the port clock
+     must be on first. (The SPI pins below are vestigial from the abandoned SPI path -- kept
+     to avoid a security-config change; safe to drop.) */
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
-  HAL_GPIO_ConfigPinAttributes(GPIOE, GPIO_PIN_0,  GPIO_PIN_NSEC);   /* PE0  ARD-D10 CS (Arduino)        */
-  HAL_GPIO_ConfigPinAttributes(GPIOD, GPIO_PIN_11, GPIO_PIN_NSEC);   /* PD11 ARD-D2  slave-ready HS in   */
+  HAL_GPIO_ConfigPinAttributes(GPIOE, GPIO_PIN_0,  GPIO_PIN_NSEC);   /* PE0  vestigial SPI CS (unused) */
+  HAL_GPIO_ConfigPinAttributes(GPIOD, GPIO_PIN_11, GPIO_PIN_NSEC);   /* PD11 slave-ready handshake in  */
   HAL_GPIO_ConfigPinAttributes(GPIOB,
                                GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_13,
-                               GPIO_PIN_NSEC);                        /* PB4 MISO, PB5 MOSI, PB13 STMod+ CS */
-  HAL_GPIO_ConfigPinAttributes(GPIOF, GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_NSEC); /* PF11/PF12 SPI-mux select */
-  HAL_GPIO_ConfigPinAttributes(GPIOG, GPIO_PIN_9,  GPIO_PIN_NSEC);   /* PG9  SCK (also drives LD1)        */
+                               GPIO_PIN_NSEC);                        /* PB4/PB5/PB13 vestigial SPI (unused) */
+  HAL_GPIO_ConfigPinAttributes(GPIOF, GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_NSEC); /* PF11/PF12 STMod+ mux select */
+  HAL_GPIO_ConfigPinAttributes(GPIOG, GPIO_PIN_9,  GPIO_PIN_NSEC);   /* PG9  vestigial SPI SCK (unused) */
   HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_10|GPIO_PIN_11, GPIO_PIN_NSEC); /* PC10 USART3_TX, PC11 USART3_RX (mikroBUS UART) */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
 
-/* ======================= Week 1 Phase 3: OSPI XIP proof =======================
-   Self-contained OCTOSPI1 bring-up + erase/program/read of a known pattern at
-   0x90000000, ported by hand from the ST OSPI_NOR_MemoryMapped example
-   (STM32Cube_FW_L5 V1.5.0) into the secure world of this TrustZone project.
-   Everything here is polling/blocking (no OCTOSPI interrupt) to avoid touching
-   stm32l5xx_it.c. The non-secure watermark for this region is dropped in
-   MX_GTZC_S_Init(). ============================================================ */
+/* ===== OSPI XIP: OCTOSPI1 bring-up + erase/program/read at 0x90000000 =====
+   Hand-ported from the ST OSPI_NOR_MemoryMapped example (Cube_FW_L5 V1.5.0).
+   All polling/blocking (no OCTOSPI IRQ) so stm32l5xx_it.c stays untouched.
+   The non-secure watermark for this region is set in MX_GTZC_S_Init(). */
 
 /**
   * @brief OCTOSPI1 MSP init: peripheral clock source, clock enables and the
@@ -947,13 +927,11 @@ static void OSPI_SendCommandNoData(OSPI_HandleTypeDef *hospi, uint32_t instructi
 }
 
 /**
-  * @brief Force the Macronix flash back to 1-line SPI STR, whatever mode it is
-  *        currently in. Essential for warm resets: an MCU reset (NRST/debug/SW)
-  *        does NOT power-cycle the external flash, so it can still be in octal
-  *        mode from the previous boot while our config code assumes SPI. We send
-  *        Reset-Enable + Reset in each possible mode (SPI/STR, OPI/STR, OPI/DTR);
-  *        only the one matching the current mode is understood. Mirrors the ST
-  *        BSP OSPI_NOR_ResetMemory() sequence.
+  * @brief Force the flash back to 1-line SPI STR from whatever mode it's in.
+  *        GOTCHA: an MCU reset doesn't power-cycle external flash, so it may still be in
+  *        octal mode from the previous boot while our config assumes SPI. Send
+  *        Reset-Enable+Reset in every mode (SPI/STR, OPI/STR, OPI/DTR); only the matching
+  *        one is understood. Mirrors ST BSP OSPI_NOR_ResetMemory().
   */
 static void OSPI_ResetFlash(OSPI_HandleTypeDef *hospi)
 {
@@ -1045,11 +1023,10 @@ static void OSPI_EnableMemoryMapped(int with_write)
 
 #if OSPI_XIP_SELFTEST
 /**
-  * @brief Week-1 destructive proof: erase the first sector, program the known
-  *        pattern via memory-mapped writes, and read it back. ERASES the flash,
-  *        so it is compiled out (OSPI_XIP_SELFTEST 0) once weights are resident.
-  *        Assumes OSPI_Init() already ran; leaves the controller in memory-mapped
-  *        mode so the non-secure side can read too.
+  * @brief Destructive proof: erase sector 0, program the known pattern via memory-mapped
+  *        writes, read it back. ERASES flash -- compiled out (OSPI_XIP_SELFTEST 0) once
+  *        weights are resident. Assumes OSPI_Init() ran; leaves memory-mapped mode on so
+  *        the non-secure side can read too.
   */
 static void OSPI_XIP_SelfTest(void)
 {
@@ -1114,13 +1091,12 @@ static void OSPI_XIP_SelfTest(void)
          ok ? "PASS" : "FAIL");
 }
 #endif /* OSPI_XIP_SELFTEST */
-/* ===================== end Week 1 Phase 3: OSPI XIP proof ==================== */
+/* ===================== end OSPI XIP ==================== */
 
 /* USER CODE BEGIN 4 */
 PUTCHAR_PROTOTYPE
 {
-  /* Place your implementation of fputc here */
-  /* e.g. write a character to the USART3 and Loop until the end of transmission */
+  /* Retarget printf to USART1 (blocking). */
   HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
 
   return ch;

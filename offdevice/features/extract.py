@@ -1,14 +1,13 @@
 """
 Off-device feature extraction: raw memory-dump bytes -> (40, 3) feature matrix.
 
-Clean contract (see params.py): no WAV round-trip, no 48 kHz write, no resample.
-    bytes -> uint8 -> int16 -> /32768.0 float32
-          -> MFCC / melspectrogram / chroma_stft at SR=22050
+Pipeline (see params.py for the frozen values):
+    bytes -> uint8 -> int16 -> /32768 float32
+          -> MFCC / mel / chroma_stft at SR=22050
           -> time-average each to a 40-vector
-          -> clean column-stack in FEATURE_ORDER -> (40, 3)
+          -> column-stack in FEATURE_ORDER -> (40, 3)
 
-This is the off-device twin of the Week 6 on-chip CMSIS-DSP path; the two MUST
-produce matching numbers for the same input bytes.
+The on-chip CMSIS-DSP port must produce matching numbers for the same bytes.
 """
 
 from pathlib import Path
@@ -22,8 +21,8 @@ from offdevice.features import params
 BytesLike = bytes | bytearray | memoryview | npt.NDArray[np.uint8]
 Source = BytesLike | str | Path
 
-# The float32 signal / feature arrays this module produces. numpy has no real
-# shape typing yet, so the shape axis stays Any; the dtype is pinned to float32.
+# float32 signal / feature arrays. numpy has no real shape typing, so the shape
+# axis stays Any; the dtype is pinned to float32.
 Signal = npt.NDArray[np.float32]
 
 
@@ -35,15 +34,9 @@ def load_dump(path: str | Path) -> bytes:
 def bytes_to_signal(raw: BytesLike) -> Signal:
     """Widen raw dump bytes to the float32 signal the feature functions expect.
 
-    Each byte is treated as UNSIGNED 0..255, widened to int16 (no sign
-    extension, no centering), then divided by 32768.0. Mirrors the original
-    ``np.array(bytearray(...), dtype=np.int16)`` followed by 16-bit PCM
-    normalization, but without ever touching a WAV file.
-
-    Guards (so a wrong input fails loudly instead of producing silent garbage):
-    a non-uint8 ndarray would otherwise be reinterpreted as raw little-endian
-    bytes (doubling/garbling the samples); an empty dump would crash librosa
-    with an opaque error downstream.
+    Each byte as UNSIGNED 0..255 -> int16 (no sign-extend, no centering) -> /32768.
+    Guards fail loudly on garbage input: a non-uint8 ndarray would be reinterpreted
+    as raw little-endian bytes (garbling samples); an empty dump crashes librosa.
     """
     if isinstance(raw, np.ndarray):
         if raw.dtype != params.BYTE_DTYPE:
@@ -91,13 +84,13 @@ def extract_features(source: Source) -> Signal:
         "chroma_stft": np.mean(chroma, axis=params.TIME_AXIS),
     }
 
-    # Clean column-stack in the FROZEN feature order -> (40, 3).
+    # Column-stack in the frozen feature order -> (40, 3).
     feats = np.stack([vectors[name] for name in params.FEATURE_ORDER], axis=1)
     return feats.astype(params.SIGNAL_DTYPE)
 
 
 def feature_stats(feats: Signal) -> dict[str, dict[str, float]]:
-    """Per-feature (per-column) min/max -- grounds Week 3 quantization."""
+    """Per-feature (per-column) min/max -- grounds later quantization."""
     return {
         name: {"min": float(feats[:, j].min()), "max": float(feats[:, j].max())}
         for j, name in enumerate(params.FEATURE_ORDER)

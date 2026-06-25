@@ -1,8 +1,7 @@
-# Off-device feature pipeline (Week 2).
+# Off-device feature pipeline.
 #
-# librosa drives the feature numbers, so its EXACT resolved version is part of
-# the contract. After installing, record `pip freeze` output for librosa/numpy/
-# scipy in offdevice/DATASET.md so Week 6 can target a known reference.
+# librosa drives the feature numbers, so its EXACT resolved version is part of the
+# contract -- record `pip freeze` for librosa/numpy/scipy to pin a known reference.
 numpy>=1.26,<2.1
 scipy>=1.11
 librosa>=0.10.2,<0.11

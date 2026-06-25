@@ -1,74 +1,42 @@
-// Test-bed A · ESP32 — half 4b: SPI slave + Wi-Fi/TCP relay.
+// Test-bed A - ESP32 UART receiver + Wi-Fi/TCP relay.
 //
-// Pipeline:  STM32 (SPI3 master) --SPI--> ESP32 (this, SPI slave) --Wi-Fi/TCP--> ncat (laptop).
+// Pipeline:  STM32 (USART3) --UART--> ESP32 (this) --Wi-Fi/TCP--> ncat (laptop).
 //
-// The STM32 master pulses CS low, clocks ONE 9-byte telemetry frame, then raises
-// CS — once per second. We catch each CS-framed transaction as an SPI slave,
-// find the 0xA5 0x5A magic, validate the XOR checksum, decode seq/value, and
-// forward a human-readable line to the laptop's `ncat -lk -p 9000` listener.
+// The STM32 sends ONE 9-byte telemetry frame once per second over the mikroBUS UART.
+// We accumulate UART bytes, find the 0xA5 0x5A magic, validate the XOR checksum, decode
+// seq/value, and forward a human-readable line to the laptop's `ncat -lk -p 9000`.
 //
 //   Frame (9 bytes):  [0]=0xA5  [1]=0x5A  [2..5]=seq u32 LE  [6..7]=value u16 LE
 //                     [8]=XOR of bytes 0..7
 //
-// Magic = frame-sync sentinel (answers "is a real frame starting here, am I aligned?").
-// Checksum = content integrity (answers "did the bytes arrive uncorrupted?"). We scan
-// the RX buffer for the magic instead of trusting byte 0, so leading idle/garbage or a
-// byte-misaligned slave transaction self-corrects on the next valid frame.
+// Magic = frame-sync sentinel ("is a real frame starting here, am I aligned?").
+// Checksum = content integrity ("did the bytes arrive uncorrupted?"). We scan the RX
+// buffer for the magic instead of trusting byte 0, so leading idle/garbage or a
+// byte-misaligned read self-corrects on the next valid frame.
 //
-// Handshake: this board drives HS_OUT_PIN high once it is Wi-Fi+TCP ready. That wire
-// goes to the STM32's PD11 (ARD D2), which currently just prints `HS=` — so you can
-// watch HS flip 0->1 on the STM32 console the moment the relay path comes up. Re-enable
-// real gating on the STM32 side only after you've confirmed HS tracks this pin.
+// Reverse path (ESP32 -> STM32): a framed counter sent once/sec proves 2-way UART -- the
+// direction the attack scenario will later use to feed corrupt data in.
+//
+// Handshake: this board drives HS_OUT_PIN high once Wi-Fi+TCP is ready. That wire goes to
+// the STM32's PD11, which currently just prints `HS=` -- re-enable real gating on the STM32
+// side only after you've confirmed HS tracks this pin.
 //
 // Board: ESP32-WROOM-32D (PlatformIO env esp32dev). Serial monitor: 115200.
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <ESP32DMASPISlave.h>
 
 // Wi-Fi + laptop-endpoint config (WIFI_SSID / WIFI_PASS / LAPTOP_IP / LAPTOP_PORT)
 // lives in secrets.h, which is gitignored so credentials never enter git history.
 #include "secrets.h"
 
-// Diagnostic build switch: 1 = GPIO loopback test (read the SPI signal pins as plain
-// inputs to find which wires are electrically live); 0 = normal SPI relay. Pair with
-// the STM32 TESTBEDA_MODE_LOOPBACK switch. Flip back to 0 to restore the real pipeline.
-#define ESP32_MODE_LOOPBACK 0
-
-// Under ESP32_MODE_LOOPBACK: 1 = REVERSE DRIVE (ESP32 drives the 3 wired SPI pads while the
-// STM32 reads them, to test the PB5/MOSI route in the other direction); 0 = original read
-// test (ESP32 reads, STM32 drives). Pair with the STM32 TESTBEDA_REVERSE_READBACK switch.
-#define ESP32_REVERSE_DRIVE 1
-
-// ---- SPI slave pins (VSPI). STM32 is the master; these are the ESP32 inputs. ----
-//   SCK  = GPIO18  <- STM32 SCK  (PG9)
-//   MISO = GPIO19  -> STM32 MISO (PB4)  -- NOT wired (TX-only link), declared for the API
-//   MOSI = GPIO23  <- STM32 MOSI (PB5)
-//   SS   = GPIO22  <- STM32 CS   (PE0 / ARD D10).  Deliberately NOT the VSPI default SS
-//                     (GPIO5) -- GPIO5 is a boot strapping pin; GPIO22 is free, so wiring
-//                     CS to it can't disturb the ESP32 boot. (GPIO matrix routes any pin.)
-static const int PIN_SCK  = 18;
-static const int PIN_MISO = 19;
-static const int PIN_MOSI = 23;
-static const int PIN_SS   = 22;
-
-// Slave-ready handshake OUT -> STM32 PD11 (ARD D2). GPIO21 is not a strapping pin.
+// Slave-ready handshake OUT -> STM32 PD11. GPIO21 is not a strapping pin.
 static const int HS_OUT_PIN = 21;
 
 // ---- Telemetry frame layout (must match the STM32 Tele_BuildFrame contract) ----
 static const uint8_t  TELE_MAGIC0  = 0xA5;
 static const uint8_t  TELE_MAGIC1  = 0x5A;
 static const size_t   TELE_FRAME_LEN = 9;
-
-// ---- SPI slave (DMA) ----
-// BUFFER_SIZE must be a multiple of 4 (DMA). 32 holds one 9-byte frame with slack for
-// any leading idle bytes the magic-scan will skip over. QUEUE_SIZE 1 = one frame at a time.
-ESP32DMASPI::Slave slave;
-static const size_t  BUFFER_SIZE = 32;
-static const size_t  QUEUE_SIZE  = 1;
-static const uint32_t SPI_TIMEOUT_MS = 2000;  // wake to service Wi-Fi/TCP if no frame arrives
-uint8_t* dma_tx_buf = nullptr;
-uint8_t* dma_rx_buf = nullptr;
 
 // ---- Networking ----
 static WiFiClient client;
@@ -126,69 +94,9 @@ static int findValidFrame(const uint8_t* buf, size_t n) {
   return -1;
 }
 
-#if ESP32_MODE_LOOPBACK
-#if ESP32_REVERSE_DRIVE
-// ---- Reverse-direction drive: the ESP32 DRIVES the 3 wired SPI pads; the STM32 reads them.
-// One pad HIGH at a time, held ~2 s, so the STM32 console shows exactly one pin move per
-// phase (unambiguous). SAME 3 wires, no rewiring: g18->SCK pad(PG9), g22->CS pad(PB13),
-// g23->MOSI pad(PB5). SCK + CS are the positive controls; MOSI/PB5 is the unknown. ----
-void setup() {
-  Serial.begin(115200);
-  delay(200);
-  Serial.println("\n[testbedA reverse] ESP32 DRIVES g18/g22/g23; STM32 reads (no SPI/Wi-Fi)");
-  pinMode(PIN_SCK,  OUTPUT);  // g18 -> SCK pad  (PG9)
-  pinMode(PIN_SS,   OUTPUT);  // g22 -> CS pad   (PB13)
-  pinMode(PIN_MOSI, OUTPUT);  // g23 -> MOSI pad (PB5)
-  digitalWrite(PIN_SCK,  LOW);
-  digitalWrite(PIN_SS,   LOW);
-  digitalWrite(PIN_MOSI, LOW);
-}
-
-void loop() {
-  struct Phase { int sck; int cs; int mosi; const char* label; };
-  static const Phase phases[] = {
-    {1, 0, 0, "SCK (g18->PG9)  HIGH"},
-    {0, 1, 0, "CS  (g22->PB13) HIGH"},
-    {0, 0, 1, "MOSI(g23->PB5)  HIGH"},
-    {0, 0, 0, "ALL LOW"},
-  };
-  for (const Phase& p : phases) {
-    digitalWrite(PIN_SCK,  p.sck);
-    digitalWrite(PIN_SS,   p.cs);
-    digitalWrite(PIN_MOSI, p.mosi);
-    Serial.printf("driving: %s   -> STM32 should read  SCK=%d CS=%d MOSI=%d\n",
-                  p.label, p.sck, p.cs, p.mosi);
-    delay(2000);
-  }
-}
-#else
-// ---- Diagnostic: read the 3 SPI signal pins as plain GPIO inputs and print them
-// (no SPI, no Wi-Fi). Pair with the STM32 loopback switch. SAME 5 wires, no rewiring.
-// A pin that follows the STM32's 3-bit counter is alive end-to-end; a pin stuck at 0
-// is a dead socket or a broken wire. INPUT_PULLDOWN makes a disconnected line read 0. ----
-void setup() {
-  Serial.begin(115200);
-  delay(200);
-  Serial.println("\n[testbedA loopback] ESP32 GPIO read test (no SPI/Wi-Fi)");
-  pinMode(PIN_SS,   INPUT_PULLDOWN);  // GPIO22 <- STM32 D10/CS/PE0
-  pinMode(PIN_MOSI, INPUT_PULLDOWN);  // GPIO23 <- STM32 D11/MOSI/PB5
-  pinMode(PIN_SCK,  INPUT_PULLDOWN);  // GPIO18 <- STM32 D13/SCK/PG9
-}
-
-void loop() {
-  const int d10 = digitalRead(PIN_SS);
-  const int d11 = digitalRead(PIN_MOSI);
-  const int d13 = digitalRead(PIN_SCK);
-  Serial.printf("D10/CS(g22)=%d  D11/MOSI(g23)=%d  D13/SCK(g18)=%d\n", d10, d11, d13);
-  delay(250);
-}
-#endif  // ESP32_REVERSE_DRIVE
-#else
-// ---- Real path: UART RX from the STM32 (USART3/PC10 over the mikroBUS UART) + Wi-Fi/TCP
-// relay. The STM32 sends the SAME 9-byte frame once/sec; we accumulate UART bytes, scan for
-// the 0xA5 0x5A magic + XOR checksum (findValidFrame), decode, print, and forward to ncat.
-// Wire change: the data jumper moves from the mikroBUS MOSI pad to the mikroBUS TX pad; the
-// ESP32 end stays on g23, now used as UART2 RX. ----
+// ---- UART RX from the STM32 (USART3 over the mikroBUS UART) + Wi-Fi/TCP relay. The STM32
+// sends a 9-byte frame once/sec; we accumulate UART bytes, scan for the 0xA5 0x5A magic +
+// XOR checksum (findValidFrame), decode, print, and forward to ncat. ----
 static const int PIN_UART_RX = 23;     // g23 <- mikroBUS TX pad (STM32 PC10 / USART3_TX)
 static const int PIN_UART_TX = 17;     // g17 -> mikroBUS RX pad (STM32 PC11 / USART3_RX)
 static uint8_t  acc[64];               // rolling accumulator for incoming UART bytes
@@ -297,4 +205,3 @@ void loop() {
   }
   accLen = remain;
 }
-#endif  // ESP32_MODE_LOOPBACK

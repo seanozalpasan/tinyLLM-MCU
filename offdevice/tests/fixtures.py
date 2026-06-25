@@ -1,17 +1,13 @@
-"""Deterministic synthetic inputs for tests -- NO external/real data.
+"""Deterministic synthetic input for tests -- no external/real data.
 
-A golden-vector regression test only needs a fixed, reproducible input. We
-synthesize 256 KB of bytes from a seeded PRNG so the fixture is self-contained
-and carries no data-provenance baggage (it does NOT depend on anyone's old
-dumps). This is NOT training data; it only pins feature-extraction behavior
-against regressions.
-
-The seed and size are FROZEN: changing either invalidates the golden vector.
+256 KB of bytes from a seeded PRNG: a self-contained, reproducible input for the
+golden-vector regression. NOT training data. Seed and size are FROZEN -- changing
+either invalidates the golden vector.
 """
 
 import numpy as np
 
-# 256 KB, matching the size of a full STM32L562 SRAM snapshot. The exact bytes
+# 256 KB, matching the size of a full NS-flash dump (0x08040000-0x0807FFFF). The exact bytes
 # are arbitrary but fixed by the seed.
 SYNTHETIC_SEED = 20260616
 SYNTHETIC_NBYTES = 262144

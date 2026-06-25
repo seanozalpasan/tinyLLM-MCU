@@ -1,13 +1,11 @@
-"""One-time golden-vector generator. RUN BY SEAN, not Claude Code.
+"""One-time golden-vector generator.
 
-Generates the (40, 3) feature matrix for the synthetic fixture and writes it to
-offdevice/tests/golden/synthetic_features.npy. Run once, eyeball the printed
-stats for sanity, then COMMIT the .npy. test_features.py guards it thereafter.
+Writes the (40, 3) feature matrix for the synthetic fixture to
+offdevice/tests/golden/synthetic_features.npy. Run once, eyeball the stats, then
+COMMIT the .npy; test_features.py guards it thereafter. Re-run only when a feature
+change is intended (a deliberate re-freeze).
 
-    python -m offdevice.tests.make_golden        # run from the repo root
-
-Re-run ONLY when a feature change is intended (then re-freeze deliberately and
-note it in DATASET.md).
+    python -m offdevice.tests.make_golden        # from the repo root
 """
 
 from pathlib import Path

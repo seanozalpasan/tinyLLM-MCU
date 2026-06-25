@@ -57,7 +57,6 @@
 /* External variables --------------------------------------------------------*/
 
 /* USER CODE BEGIN EV */
-extern DMA_HandleTypeDef hdma_memtomem_dma1_channel1;
 extern DMA_HandleTypeDef hdma_memtomem_dma1_channel2;
 extern DMA_HandleTypeDef hdma_memtomem_dma1_channel3;
 /* USER CODE END EV */
@@ -244,7 +243,7 @@ void DMA1_Channel3_IRQHandler(void)
 
 
 /**
-  * @brief This function handles DMA1 channel3 global interrupt.
+  * @brief This function handles DMA1 channel2 global interrupt.
   */
 void DMA1_Channel2_IRQHandler(void)
 {

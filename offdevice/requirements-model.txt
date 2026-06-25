@@ -1,0 +1,17 @@
+# Model/host track: load + run weiser/30M-0.4 (GPT-2, 30M) on the laptop.
+#
+# Kept SEPARATE from requirements.txt on purpose: requirements.txt pins the
+# librosa/numpy/scipy versions that DEFINE the feature numbers (a frozen contract),
+# and we don't want torch's resolver perturbing those. Both install into the same
+# repo-root .venv.
+#
+# Install (from repo root, .venv active):
+#   pip install -r offdevice\requirements-model.txt
+#
+# Pulls the CPU build of torch -- enough for a single 30M forward pass (sub-second
+# on CPU). For GPU (fine-tuning), install the CUDA build instead:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# The inspection script auto-selects cuda when present, else cpu -- no code change.
+torch>=2.2
+transformers>=4.44
+safetensors>=0.4

@@ -1,78 +1,54 @@
 """
-Frozen feature-extraction parameters -- the SINGLE SOURCE OF TRUTH.
+Frozen feature-extraction parameters — the single source of truth.
 
-Every number that affects the feature output lives here. The Week 6 on-chip
-CMSIS-DSP implementation MUST mirror these exactly, or the model will train on
-one feature distribution and see a different one at inference time (garbage
-verdicts). See CLAUDE.md "Clean audio contract".
-
-DO NOT change a value here without (a) retraining the model and (b) re-freezing
-the golden vector via offdevice/tests/make_golden.py. See offdevice/DATASET.md.
+Every value here affects the feature output. The on-chip CMSIS-DSP port must
+mirror them exactly, or the model trains on one distribution and infers on
+another. Don't change a value without retraining and re-freezing the golden
+vector (offdevice/tests/make_golden.py).
 """
 
 import numpy as np
 
-# --- Sample rate -------------------------------------------------------------
-# The original MARS pipeline effectively computed features at 22050 Hz (the
-# librosa.load default, AFTER its 48 kHz-write / 22050-reload resample). We
-# compute DIRECTLY at 22050 -- no WAV, no 48 kHz write, no resample -- which
-# preserves the frequency semantics (mel bins, fmax) while dropping only the
-# resampling artifact. Nyquist = SR/2 = 11025 Hz, so FMAX=8000 is valid.
-# Contract decision; advisor signed off 2026-06-16.
+# Compute features directly at 22050 Hz — no WAV write, no 48 kHz, no resample.
+# Nyquist = SR/2 = 11025 Hz, so FMAX=8000 is valid.
 SR = 22050
 
-# --- STFT framing (librosa defaults, set EXPLICITLY so they are frozen) ------
+# STFT framing — librosa defaults, pinned explicitly so they stay frozen.
 N_FFT = 2048
 HOP_LENGTH = 512
 
-# --- Per-feature parameters --------------------------------------------------
-N_MFCC = 40          # MFCC coefficients kept
-N_MELS = 40          # mel bands for the standalone melspectrogram FEATURE
-FMAX = 8000          # upper mel frequency (Hz); valid since < Nyquist (11025)
-N_CHROMA = 40        # chroma bins
+# Per-feature sizes (each → a 40-bin vector).
+N_MFCC = 40
+N_MELS = 40          # mel bands for the standalone mel feature
+FMAX = 8000          # upper mel frequency (Hz); < Nyquist
+N_CHROMA = 40
 
-# NOTE: librosa.feature.mfcc computes its OWN internal melspectrogram to run the
-# DCT on. That internal mel filterbank uses librosa's DEFAULT n_mels=128 -- NOT
-# N_MELS above. We leave it at the default to match the original preprocessing.
-# N_MELS=40 applies only to the standalone melspectrogram feature. Week 6 must
-# replicate BOTH: 128 internal mels for MFCC, 40 mels for the mel feature.
+# GOTCHA: librosa.feature.mfcc builds its OWN internal mel filterbank for the DCT
+# at librosa's default n_mels=128 — NOT N_MELS above. The on-chip port must
+# replicate BOTH: 128 internal mels for MFCC, 40 for the standalone mel feature.
 MFCC_INTERNAL_N_MELS = 128
 
-# chroma_stft's `tuning` defaults to None, which makes librosa ESTIMATE a tuning
-# offset from the signal on every call (librosa.estimate_tuning -> pitch track).
-# That is a hidden, INPUT-DEPENDENT parameter: it would vary per dump (not
-# frozen), it is meaningless for byte-derived pseudo-signals, and it would force
-# Week 6 to replicate pitch-tracking on-chip. We PIN it to 0.0 -> deterministic,
-# contract-stable, trivial to mirror on-chip. For the synthetic fixture
-# estimate_tuning already fell back to 0.0 (the "empty frequency set" warning),
-# so pinning is a no-op for the golden vector.
+# Pin chroma tuning. The default (None) makes librosa estimate a per-signal pitch
+# offset every call — nondeterministic, meaningless for byte-derived signals, and
+# painful to mirror on-chip. 0.0 is deterministic and a no-op on our inputs.
 TUNING = 0.0
 
-# --- Output layout -----------------------------------------------------------
-# Each feature is time-averaged to a 40-vector, then stacked COLUMN-WISE into a
-# 40x3 matrix in this FROZEN order. Column j corresponds to FEATURE_ORDER[j].
-#
-# NOTE: this is a CLEAN column-stack, deliberately replacing the original's
-# np.reshape(np.vstack(...), (40, 5)), which was a row-major reflow that
-# scrambled the bin/feature correspondence. Week 6 mirrors THIS clean layout,
-# not the original reshape.
+# Output: each feature time-averaged to a 40-vector, then column-stacked in this
+# frozen order → (40, 3). Clean column-stack; do NOT reproduce MARS's original
+# np.reshape(np.vstack(...)) row-major reflow, which scrambled the bin/feature
+# correspondence. The on-chip port mirrors THIS layout.
 FEATURE_ORDER = ("mfcc", "mel", "chroma_stft")
 N_BINS = 40
 N_FEATURES = 3
 FEATURE_SHAPE = (N_BINS, N_FEATURES)   # (40, 3)
 
-# --- Byte -> signal contract -------------------------------------------------
-# Raw dump bytes are interpreted as UNSIGNED 0..255 (uint8), widened to int16
-# with NO sign-extension and NO centering (reproducing the original's
-# np.array(bytearray(...), dtype=np.int16)), then scaled by /32768.0 into
-# float32. Resulting range is therefore [0, 255/32768] ~= [0, 0.00778]: a small,
-# all-positive, DC-heavy signal. This is intentional and MUST match on-chip.
+# Byte → signal contract: each dump byte as UNSIGNED 0..255, widened to int16 (no
+# sign-extend, no centering), then /32768 → float32. Range [0, 255/32768] ≈
+# [0, 0.00778]: small, all-positive, DC-heavy. Must match on-chip.
 BYTE_DTYPE = np.uint8
 WIDEN_DTYPE = np.int16
 SCALE = np.float32(32768.0)
 SIGNAL_DTYPE = np.float32
 
-# --- Time averaging ----------------------------------------------------------
-# Each feature matrix is (n_bins, n_frames); we average over the TIME axis.
-# np.mean(feature, axis=1) == np.mean(feature.T, axis=0) -> (n_bins,) vector.
+# Feature matrices are (n_bins, n_frames); average over the time axis.
 TIME_AXIS = 1

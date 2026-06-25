@@ -24,14 +24,6 @@
 #include "secure_nsc.h"
 #include <string.h>     /* for memcmp() */
 
-/** @addtogroup STM32L5xx_HAL_Examples
-  * @{
-  */
-
-/** @addtogroup Templates_TZ
-  * @{
-  */
-
 /* Global variables ----------------------------------------------------------*/
 void *pSecureFaultCallback = NULL;   /* Pointer to secure fault callback in Non-secure */
 void *pSecureErrorCallback = NULL;   /* Pointer to secure error callback in Non-secure */
@@ -258,12 +250,5 @@ void NonSecureToNonSecureTransferError(DMA_HandleTypeDef *hdma_memtomem_dma1_cha
 }
 
 
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
 /* USER CODE END Non_Secure_CallLib */
 
