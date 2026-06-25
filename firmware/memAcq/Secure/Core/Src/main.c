@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include "flash_dump.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -207,6 +208,10 @@ int main(void)
     HAL_DMA_RegisterCallback(&hdma_memtomem_dma1_channel2, HAL_DMA_XFER_CPLT_CB_ID, NonSecureToNonSecureTransferComplete);
     HAL_DMA_RegisterCallback(&hdma_memtomem_dma1_channel2, HAL_DMA_XFER_ERROR_CB_ID, NonSecureToNonSecureTransferError);
 
+#if DUMP_NSFLASH
+    Dump_NSFlash_Service(&huart1);   /* host-triggered NS-flash dumps; never returns (no NS jump) */
+#endif
+
     HAL_SuspendTick();
   /* USER CODE END 2 */
 
@@ -365,6 +370,15 @@ static void MX_GTZC_S_Init(void)
   }
   /* USER CODE BEGIN GTZC_S_Init 2 */
 
+#if DUMP_NSFLASH
+  /* The dump path hashes in the secure world, so the HASH peripheral must be secure
+     (same pattern as the USART1 grant above). */
+  if (HAL_GTZC_TZSC_ConfigPeriphAttributes(GTZC_PERIPH_HASH, GTZC_TZSC_PERIPH_SEC | GTZC_TZSC_PERIPH_NPRIV) != HAL_OK)
+  {
+    Error_Handler();
+  }
+#endif
+
   /* Open OCTOSPI1 to non-secure. External memory defaults to SECURE in GTZC, but SAU region 4
      marks 0x60000000-0x9FFFFFFF non-secure -- so every access to 0x90000000 (even from secure
      code) is a non-secure bus transaction, blocked until we drop a non-secure watermark (MPCWM)
@@ -432,11 +446,13 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE BEGIN USART1_Init 1 */
 
   /* USER CODE END USART1_Init 1 */
+  /* 8N1 @ 921600: one static config carrying both the ASCII console and the raw
+     256 KB binary dump. Replaces the old 7-O-1 console -- ASCII still prints fine. */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
+  huart1.Init.BaudRate = 921600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_ODD;
+  huart1.Init.Parity = UART_PARITY_NONE;
   huart1.Init.Mode = UART_MODE_TX_RX;
   huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart1.Init.OverSampling = UART_OVERSAMPLING_16;
