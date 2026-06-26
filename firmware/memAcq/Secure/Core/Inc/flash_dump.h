@@ -12,7 +12,7 @@
 
 #include "main.h"
 
-#define DUMP_NSFLASH        1                /* 1 = dump-capture build (no NS jump); 0 = normal boot */
+#define DUMP_NSFLASH        0                /* 1 = dump-capture build (no NS jump); 0 = normal boot */
 #define NSFLASH_DUMP_START  0x08040000UL     /* NS internal flash, bank 2 (..0x0807FFFF) */
 #define NSFLASH_DUMP_BYTES  0x00040000UL     /* 256 KB = 262144 bytes */
 #define NSFLASH_DUMP_CHUNK  1024U            /* 1 KB UART tx granularity */

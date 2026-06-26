@@ -4,7 +4,7 @@
 //
 // The STM32 sends ONE 9-byte telemetry frame once per second over the mikroBUS UART.
 // We accumulate UART bytes, find the 0xA5 0x5A magic, validate the XOR checksum, decode
-// seq/value, and forward a human-readable line to the laptop's `ncat -lk -p 9000`.
+// seq/value, and forward a human-readable line to the laptop listener (tools/listen.py, or ncat).
 //
 //   Frame (9 bytes):  [0]=0xA5  [1]=0x5A  [2..5]=seq u32 LE  [6..7]=value u16 LE
 //                     [8]=XOR of bytes 0..7
@@ -57,7 +57,7 @@ static void connectWiFi() {
   Serial.println(WiFi.localIP());
 }
 
-// Keep a live TCP connection to the laptop's ncat listener. Returns true when connected.
+// Keep a live TCP connection to the laptop listener (listen.py / ncat). Returns true when connected.
 static bool ensureTcp() {
   if (client.connected()) {
     return true;
