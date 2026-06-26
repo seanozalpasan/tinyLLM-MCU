@@ -12,6 +12,7 @@ Run (from repo root, .venv active):
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 from pathlib import Path
 
@@ -52,9 +53,9 @@ def main() -> int:
                 file=str(dump),  # absolute -> loader uses it as-is
                 label="benign",
                 testbed="ref",
-                fw_commit="n/a-refs-fixture",
                 capture_point="n/a-refs-fixture",
                 mem_range="n/a-refs-fixture",
+                md5=hashlib.md5(dump.read_bytes()).hexdigest(),  # real digest of the fixture bytes
                 ts="1970-01-01T00:00:00",
                 n_bytes=REFS_DUMP_BYTES,  # 256 KB flash dumps -- same source + size as our captures
                 conditions={"note": "refs plumbing fixture -- NOT training data"},

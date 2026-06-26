@@ -10,3 +10,6 @@ __pycache__/
 *.su
 *.d
 *.cyclo
+
+# Captured NS-flash dumps + their manifest (dev-phase dataset; large, laptop-local).
+offdevice/data/captures/

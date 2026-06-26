@@ -8,3 +8,8 @@ librosa>=0.10.2,<0.11
 scikit-learn>=1.3
 soundfile>=0.12
 pytest>=8.0
+
+# Serial capture of NS-flash dumps from the board (offdevice/data/capture.py): pyserial
+# drives USART1 @ 921600 8N1 to read the framed 256 KB dump. Pure-python and tiny, so it
+# doesn't perturb the librosa/numpy/scipy versions that define the feature contract.
+pyserial>=3.5

@@ -8,6 +8,7 @@ Run from the repo root (so `import offdevice...` resolves):
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -24,14 +25,19 @@ from offdevice.data.manifest import append_record, read_manifest, write_manifest
 from offdevice.data.validate_refs import EXPECTED_REFS_DUMPS, find_refs_dumps
 
 
+# A real verified chip md5 of an NS-flash image -- a genuine 32-hex digest, so the
+# fixture mirrors an actual capture rather than a made-up string.
+_SAMPLE_MD5 = "70660e116f908c1cfe560eb9f1bfa350"
+
+
 def _record(file: str = "benign__tbA__t1__run001__19700101T0000.bin") -> DumpRecord:
     return DumpRecord(
         file=file,
         label="benign",
         testbed="tbA",
-        fw_commit="deadbeef",
         capture_point="loop-quiesced",
         mem_range="0x08040000-0x0807FFFF",
+        md5=_SAMPLE_MD5,
         ts="2026-06-20T15:30:00",
         conditions={"temp_c": 23.4},
     )
@@ -45,17 +51,45 @@ def test_record_json_round_trip() -> None:
 
 
 def test_record_rejects_bad_label() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="label must be one of"):
         _record_kwargs = dict(
-            file="x.bin", label="suspicious", testbed="tbA", fw_commit="x",
-            capture_point="x", mem_range="x", ts="x",
+            file="x.bin", label="suspicious", testbed="tbA",
+            capture_point="x", mem_range="x", md5=_SAMPLE_MD5, ts="x",
         )
         DumpRecord(**_record_kwargs)  # type: ignore[arg-type]
 
 
+# Each case mutates the known-good digest one way it can go wrong -- wrong case, wrong
+# length, a prefix, a non-hex char -- so the defect is visible in the expression itself.
+@pytest.mark.parametrize("bad_md5", [
+    "",
+    _SAMPLE_MD5.upper(),
+    _SAMPLE_MD5[:-1],
+    _SAMPLE_MD5 + "0",
+    "0x" + _SAMPLE_MD5,
+    _SAMPLE_MD5[:-1] + "z",
+])
+def test_record_rejects_bad_md5(bad_md5: str) -> None:
+    with pytest.raises(ValueError, match="md5 must be lowercase 32-hex"):
+        DumpRecord(
+            file="x.bin", label="benign", testbed="tbA",
+            capture_point="x", mem_range="x", md5=bad_md5, ts="x",
+        )
+
+
 def test_from_json_obj_requires_keys() -> None:
-    with pytest.raises(ValueError, match="missing required keys"):
+    # md5 is required, not defaulted -- a record missing it must be rejected, not filled.
+    with pytest.raises(ValueError, match=r"missing required keys.*md5"):
         DumpRecord.from_json_obj({"file": "x.bin", "label": "benign"})
+
+
+def test_to_json_obj_key_order() -> None:
+    # The manifest is long-lived, append-only JSON Lines, so the on-disk key order is a
+    # contract -- lock it here so a refactor can't silently reshuffle the schema.
+    assert list(_record().to_json_obj().keys()) == [
+        "file", "label", "testbed", "conditions", "capture_point",
+        "mem_range", "sr", "md5", "n_bytes", "ts",
+    ]
 
 
 def test_build_filename() -> None:
@@ -112,12 +146,13 @@ def test_refs_dumps_are_256k_and_round_trip(tmp_path: Path) -> None:
     dumps = find_refs_dumps()
     assert len(dumps) == EXPECTED_REFS_DUMPS  # fail loudly if a dump goes missing
     manifest = tmp_path / "manifest.jsonl"
-    for d in dumps:
+    for dump in dumps:
         # refs are 256 KB flash dumps -- same source + size as our captures
         append_record(manifest, DumpRecord(
-            file=str(d), label="benign", testbed="ref", fw_commit="ref",
-            capture_point="ref", mem_range="ref", ts="1970-01-01T00:00:00",
-            n_bytes=REFS_DUMP_BYTES,
+            file=str(dump), label="benign", testbed="ref",
+            capture_point="ref", mem_range="ref",
+            md5=hashlib.md5(dump.read_bytes()).hexdigest(),
+            ts="1970-01-01T00:00:00", n_bytes=REFS_DUMP_BYTES,
         ))
     loaded = list(iter_dataset(manifest))
     assert len(loaded) == len(dumps)

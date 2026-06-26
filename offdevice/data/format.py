@@ -3,7 +3,7 @@ Dataset dump format -- the single source of truth for what a captured dump is an
 how its metadata is recorded.
 
 The dump is a raw 256 KB .bin. Everything else -- label, test-bed, conditions,
-firmware commit, memory range -- lives in a manifest.jsonl record (and is mirrored
+memory range, whole-dump MD5 -- lives in a manifest.jsonl record (and is mirrored
 in the filename for humans). The label is NEVER inferred from the bytes: it comes
 from the capture process and is recorded here.
 
@@ -13,6 +13,7 @@ reader/writer is in manifest.py, the size-validating reader in loader.py.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 # --- Dump size ---------------------------------------------------------------
@@ -42,20 +43,28 @@ LABEL_TO_INT: dict[str, int] = {"benign": 1, "anomalous": 0}
 FILENAME_SEP = "__"
 FILENAME_SUFFIX = ".bin"
 
+# Whole-dump MD5 fingerprint: lowercase 32-hex, exactly as both
+# hashlib.md5(payload).hexdigest() and the on-chip hardware HASH peripheral emit it.
+# A record's md5 is rejected unless it matches this, so a malformed digest (uppercase,
+# "0x"-prefixed, wrong length, raw bytes) can't slip into the manifest.
+MD5_HEX_RE = re.compile(r"[0-9a-f]{32}")
+
 
 @dataclass(frozen=True)
 class DumpRecord:
     """One manifest.jsonl line -- the provenance of a single dump.
 
-    n_bytes is stored per-record so the loader can catch a truncated capture.
+    md5 is the whole-dump fingerprint (== the on-chip hardware-HASH digest and the
+    host's hashlib re-check); n_bytes is stored per-record so the loader catches a
+    truncated capture.
     """
 
     file: str               # dump filename or path, relative to the manifest dir
     label: str              # "benign" | "anomalous" -- from the capture, not the bytes
     testbed: str            # "tbA" | "tbB" (or "ref" for plumbing fixtures)
-    fw_commit: str          # firmware git commit the dump was captured under
     capture_point: str      # where in the workload loop the snapshot was taken
     mem_range: str          # e.g. "0x08040000-0x0807FFFF" (the NS-flash span)
+    md5: str                # whole-dump MD5, lowercase 32-hex (integrity + fingerprint)
     ts: str                 # ISO-8601 capture timestamp, e.g. "2026-06-20T15:30:00"
     sr: int = 22_050        # feature sample rate this dump is destined for (contract tie)
     n_bytes: int = DUMP_BYTES
@@ -64,6 +73,8 @@ class DumpRecord:
     def __post_init__(self) -> None:
         if self.label not in LABELS:
             raise ValueError(f"label must be one of {LABELS}, got {self.label!r}")
+        if MD5_HEX_RE.fullmatch(self.md5) is None:
+            raise ValueError(f"md5 must be lowercase 32-hex, got {self.md5!r}")
         if self.n_bytes <= 0:
             raise ValueError(f"n_bytes must be positive, got {self.n_bytes}")
 
@@ -78,19 +89,20 @@ class DumpRecord:
             "label": self.label,
             "testbed": self.testbed,
             "conditions": self.conditions,
-            "fw_commit": self.fw_commit,
             "capture_point": self.capture_point,
             "mem_range": self.mem_range,
             "sr": self.sr,
+            "md5": self.md5,
             "n_bytes": self.n_bytes,
             "ts": self.ts,
         }
 
     @classmethod
     def from_json_obj(cls, obj: dict[str, object]) -> DumpRecord:
-        """Inverse of to_json_obj -- tolerant of missing optional fields."""
-        required = ("file", "label", "testbed", "fw_commit",
-                    "capture_point", "mem_range", "ts")
+        """Inverse of to_json_obj -- tolerant of missing OPTIONAL fields (sr, n_bytes,
+        conditions). Every required key -- including md5 -- must be present."""
+        required = ("file", "label", "testbed", "capture_point",
+                    "mem_range", "md5", "ts")
         missing = [k for k in required if k not in obj]
         if missing:
             raise ValueError(f"manifest record missing required keys: {missing}")
@@ -98,9 +110,9 @@ class DumpRecord:
             file=str(obj["file"]),
             label=str(obj["label"]),
             testbed=str(obj["testbed"]),
-            fw_commit=str(obj["fw_commit"]),
             capture_point=str(obj["capture_point"]),
             mem_range=str(obj["mem_range"]),
+            md5=str(obj["md5"]),
             ts=str(obj["ts"]),
             sr=int(obj.get("sr", 22_050)),  # type: ignore[arg-type]
             n_bytes=int(obj.get("n_bytes", DUMP_BYTES)),  # type: ignore[arg-type]
