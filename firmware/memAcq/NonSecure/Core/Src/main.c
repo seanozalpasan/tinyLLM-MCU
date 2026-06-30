@@ -51,6 +51,11 @@
 #define TELE_HS_PORT    GPIOD
 #define TELE_HS_PIN     GPIO_PIN_11
 
+/* ns-flash_static_proof: 1 = run the NV-region churn proof at boot then idle; 0 = the
+   normal OSPI/telemetry boot. The proof writes ONLY Bank-2 pages 126-127; flip back to 0
+   to restore the original NonSecure app. */
+#define NV_PROOF_DEMO   1
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -93,6 +98,9 @@ static void Uart3_Write(const uint8_t *buf, uint32_t len);
 static void Uart3_Poll(void);
 static void NonSecureSecureTransferCompleteCallback(DMA_HandleTypeDef *hdma_memtomem_dma1_channelx);
 static void NonSecureNonSecureTransferCompleteCallback(DMA_HandleTypeDef *hdma_memtomem_dma1_channelx);
+#if NV_PROOF_DEMO
+static void NvProof_Run(void);
+#endif
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -128,6 +136,14 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
+
+#if NV_PROOF_DEMO
+  /* NV-region churn proof: write only the two reserved NV pages, report over the secure
+     veneer, then idle so the flash image is stable for an SWD capture. The OSPI/telemetry
+     path below is intentionally skipped while the proof is active. */
+  NvProof_Run();
+  while (1) { __WFI(); }
+#endif
 
   /* ---- Non-secure read-back of the OSPI XIP region ----
      The secure world already programmed the pattern, left OCTOSPI1 memory-mapped, and
@@ -500,6 +516,158 @@ static void Uart3_Poll(void)
     return;  /* one frame per poll is plenty at 1 Hz */
   }
 }
+
+#if NV_PROOF_DEMO
+/* ===== NV-region churn proof =================================================
+   Splits NS Bank-2 flash into a static, hashable CODE/.rodata region and one small
+   mutable NV region (the top two 2 KB pages). A hand-rolled append-log writes ONLY
+   those pages: page 126 = boot counter (bumped every boot), page 127 = settings
+   (a setpoint appended every Nth boot). An SWD dump + the host analyze.py then show
+   the CODE region is byte-identical across boots while 100% of changed bytes fall in NV.
+
+   In-place overwrite is impossible here: each 64-bit doubleword has ECC fixed at program
+   time, so a programmed doubleword cannot be rewritten without erasing its whole 2 KB
+   page -- which is exactly why real NV drivers append + garbage-collect instead. */
+
+/* Top two pages of Bank 2 (0x08040000..0x0807FFFF); a Bank-2 dump's NV_OFFSET is 0x3F000.
+   Code/.rodata is only a few KB above the base, far below 0x0807F000, so these pages stay
+   erased (0xFF) until the log writes them. */
+#define NV_BOOTCNT_ADDR     0x0807F000UL
+#define NV_SETTINGS_ADDR    0x0807F800UL
+#define NV_BANK2_BASE       0x08040000UL
+#define NV_PAGE_SIZE        0x800UL
+#define NV_SLOTS_PER_PAGE   (NV_PAGE_SIZE / 8u)
+#define NV_ERASED_DW        0xFFFFFFFFFFFFFFFFULL   /* an un-programmed doubleword reads as this */
+
+#define NV_SETPOINT_BASE    20u
+#define NV_SETPOINT_STEP    5u
+#define NV_SETTINGS_EVERY_N 5u           /* a new setpoint is appended on every Nth boot */
+#define NV_SETTINGS_MARKER  0x55AAu      /* tags a valid settings record (vs erased 0xFFFF) */
+
+#define NV_SR_ERR_MASK  (FLASH_NSSR_NSPROGERR | FLASH_NSSR_NSWRPERR | FLASH_NSSR_NSPGAERR | \
+                         FLASH_NSSR_NSSIZERR  | FLASH_NSSR_NSPGSERR)
+#define NV_SR_CLR_MASK  (FLASH_NSSR_NSEOP | FLASH_NSSR_NSOPERR | NV_SR_ERR_MASK)
+
+static void Nv_Unlock(void)
+{
+  /* NSKEYR unlock sequence; the constants are the architectural FLASH keys (RM0438). */
+  if ((FLASH_NS->NSCR & FLASH_NSCR_NSLOCK) != 0u)
+  {
+    FLASH_NS->NSKEYR = 0x45670123u;
+    FLASH_NS->NSKEYR = 0xCDEF89ABu;
+  }
+}
+
+static void Nv_Lock(void) { FLASH_NS->NSCR |= FLASH_NSCR_NSLOCK; }
+
+/* Erase one 2 KB Bank-2 page (addr = page base). BKER selects bank 2; PNB is the page
+   index within the bank. Returns 0 on success. */
+static int Nv_ErasePage(uint32_t addr)
+{
+  const uint32_t page = (addr - NV_BANK2_BASE) / NV_PAGE_SIZE;
+  while ((FLASH_NS->NSSR & FLASH_NSSR_NSBSY) != 0u) { }
+  FLASH_NS->NSSR = NV_SR_CLR_MASK;                         /* clear stale flags (write-1-to-clear) */
+  const uint32_t cr = FLASH_NSCR_NSPER | FLASH_NSCR_NSBKER | (page << FLASH_NSCR_NSPNB_Pos);
+  FLASH_NS->NSCR = cr;
+  FLASH_NS->NSCR = cr | FLASH_NSCR_NSSTRT;
+  while ((FLASH_NS->NSSR & FLASH_NSSR_NSBSY) != 0u) { }
+  const int err = ((FLASH_NS->NSSR & NV_SR_ERR_MASK) != 0u) ? -1 : 0;
+  FLASH_NS->NSCR = 0u;
+  return err;
+}
+
+/* Program one 64-bit doubleword at addr (8-byte aligned, currently erased). The pair of
+   32-bit stores forms the doubleword the controller commits with one ECC. */
+static int Nv_ProgramDW(uint32_t addr, uint64_t value)
+{
+  while ((FLASH_NS->NSSR & FLASH_NSSR_NSBSY) != 0u) { }
+  FLASH_NS->NSSR = NV_SR_CLR_MASK;
+  FLASH_NS->NSCR = FLASH_NSCR_NSPG;
+  *(volatile uint32_t *)(addr)      = (uint32_t)(value & 0xFFFFFFFFu);
+  *(volatile uint32_t *)(addr + 4u) = (uint32_t)(value >> 32);
+  while ((FLASH_NS->NSSR & FLASH_NSSR_NSBSY) != 0u) { }
+  const int err = ((FLASH_NS->NSSR & NV_SR_ERR_MASK) != 0u) ? -1 : 0;
+  FLASH_NS->NSCR = 0u;
+  return err;
+}
+
+/* Append count+1 to the boot-counter log and return it; erase + restart when full (GC). */
+static uint32_t Nv_BumpBootCount(void)
+{
+  volatile uint64_t *slot = (volatile uint64_t *)NV_BOOTCNT_ADDR;
+  uint32_t count = 0u, write_idx = 0u;
+  for (uint32_t i = 0u; i < NV_SLOTS_PER_PAGE; i++)
+  {
+    if (slot[i] == NV_ERASED_DW) { break; }   /* first erased slot ends the append log */
+    count = (uint32_t)slot[i];
+    write_idx = i + 1u;
+  }
+  Nv_Unlock();
+  if (write_idx >= NV_SLOTS_PER_PAGE) { Nv_ErasePage(NV_BOOTCNT_ADDR); write_idx = 0u; }
+  Nv_ProgramDW(NV_BOOTCNT_ADDR + write_idx * 8u, (uint64_t)(count + 1u));
+  Nv_Lock();
+  return count + 1u;
+}
+
+/* Settings record = [marker u16 | reserved u16 | value u32]; the last marked record wins. */
+static uint32_t Nv_GetSetpoint(void)
+{
+  volatile uint64_t *slot = (volatile uint64_t *)NV_SETTINGS_ADDR;
+  uint32_t setpoint = NV_SETPOINT_BASE;
+  for (uint32_t i = 0u; i < NV_SLOTS_PER_PAGE; i++)
+  {
+    if (slot[i] == NV_ERASED_DW) { break; }
+    if ((uint16_t)(slot[i] & 0xFFFFu) == NV_SETTINGS_MARKER) { setpoint = (uint32_t)(slot[i] >> 32); }
+  }
+  return setpoint;
+}
+
+static void Nv_AppendSetpoint(uint32_t value)
+{
+  volatile uint64_t *slot = (volatile uint64_t *)NV_SETTINGS_ADDR;
+  uint32_t write_idx = 0u;
+  while (write_idx < NV_SLOTS_PER_PAGE && slot[write_idx] != NV_ERASED_DW) { write_idx++; }
+  Nv_Unlock();
+  if (write_idx >= NV_SLOTS_PER_PAGE) { Nv_ErasePage(NV_SETTINGS_ADDR); write_idx = 0u; }
+  Nv_ProgramDW(NV_SETTINGS_ADDR + write_idx * 8u,
+               (uint64_t)NV_SETTINGS_MARKER | ((uint64_t)value << 32));
+  Nv_Lock();
+}
+
+/* Bump the boot counter every boot (high-freq churn); append a new setpoint on every Nth
+   boot (low-freq churn); report both over the secure UART veneer. Both writes land only in
+   the two NV pages -- the rest of Bank 2 never changes. */
+static void NvProof_Run(void)
+{
+  const uint32_t boot = Nv_BumpBootCount();
+  uint32_t setpoint;
+
+  /* GOTCHA: report the value we just wrote, not a read-back. An in-same-boot read of a
+     freshly-programmed doubleword can return stale data through the flash read cache (the
+     SWD dump bypasses the CPU, so it always shows the true record). On boots that don't
+     write the settings page, reading the current record is correct. */
+  if (*(volatile uint64_t *)NV_SETTINGS_ADDR == NV_ERASED_DW)
+  {
+    setpoint = NV_SETPOINT_BASE;             /* first boot: define the baseline setpoint */
+    Nv_AppendSetpoint(setpoint);
+  }
+  else if ((boot % NV_SETTINGS_EVERY_N) == 0u)
+  {
+    setpoint = NV_SETPOINT_BASE + (boot / NV_SETTINGS_EVERY_N) * NV_SETPOINT_STEP;
+    Nv_AppendSetpoint(setpoint);
+  }
+  else
+  {
+    setpoint = Nv_GetSetpoint();
+  }
+
+  char msg[128];
+  snprintf(msg, sizeof(msg),
+           "[NVPROOF] boot=%lu setpoint=%lu | wrote only NV pages 0x0807F000/0x0807F800 (dump offset 0x3F000)\r\n",
+           (unsigned long)boot, (unsigned long)setpoint);
+  SECURE_print_Log(msg);
+}
+#endif /* NV_PROOF_DEMO */
 
 /* USER CODE END 4 */
 
