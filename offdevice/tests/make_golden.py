@@ -1,6 +1,6 @@
 """One-time golden-vector generator.
 
-Writes the (40, 3) feature matrix for the synthetic fixture to
+Writes the (40, 3) feature matrix for the synthetic 4 KB NV fixture to
 offdevice/tests/golden/synthetic_features.npy. Run once, eyeball the stats, then
 COMMIT the .npy; test_features.py guards it thereafter. Re-run only when a feature
 change is intended (a deliberate re-freeze).
@@ -13,14 +13,14 @@ from pathlib import Path
 import numpy as np
 
 from offdevice.features import extract
-from offdevice.tests.fixtures import synthetic_dump
+from offdevice.tests.fixtures import synthetic_nv_region
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 GOLDEN_PATH = GOLDEN_DIR / "synthetic_features.npy"
 
 
 def main() -> None:
-    feats = extract.extract_features(synthetic_dump())
+    feats = extract.extract_features(synthetic_nv_region())
     GOLDEN_DIR.mkdir(exist_ok=True)
     np.save(GOLDEN_PATH, feats)
     print(f"wrote {GOLDEN_PATH}")

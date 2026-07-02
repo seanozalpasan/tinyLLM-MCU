@@ -213,8 +213,10 @@ int main(void)
     HAL_DMA_RegisterCallback(&hdma_memtomem_dma1_channel2, HAL_DMA_XFER_CPLT_CB_ID, NonSecureToNonSecureTransferComplete);
     HAL_DMA_RegisterCallback(&hdma_memtomem_dma1_channel2, HAL_DMA_XFER_ERROR_CB_ID, NonSecureToNonSecureTransferError);
 
-#if DUMP_NSFLASH
+#if DUMP_NSFLASH == 1
     Dump_NSFlash_Service(&huart1);   /* host-triggered NS-flash dumps; never returns (no NS jump) */
+#elif DUMP_NSFLASH == 2
+    Dump_NSFlash_BootWindow(&huart1);   /* one capture chance at boot, then the normal NS jump */
 #endif
 
     HAL_SuspendTick();

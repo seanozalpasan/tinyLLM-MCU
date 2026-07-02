@@ -16,7 +16,9 @@ On success: writes <captures>/<benign__tbA__variant__runNNN__ts>.bin and appends
 DumpRecord to <captures>/manifest.jsonl. The record's `file` is the bare filename, so the
 captures dir is a self-contained, relocatable dataset.
 
-Run (from repo root, .venv active; board flashed with a DUMP_NSFLASH=1 build, on COM3):
+Run (from repo root, .venv active; board on COM3 running a DUMP_NSFLASH=1 service
+build -- against the DUMP_NSFLASH=2 workload build, use offdevice.data.collect,
+which resets the board into its boot-time capture window):
     python -m offdevice.data.capture <variant-tag>
 e.g.
     python -m offdevice.data.capture tbA-benign-rawpass-v1
@@ -107,13 +109,12 @@ def _sync_to_sentinel(reader: ByteReader, deadline: float) -> None:
             return
 
 
-def parse_dump_stream(reader: ByteReader, deadline: float) -> tuple[bytes, str]:
-    """Read one verified frame from an already-triggered stream; return (payload, md5_hex).
+def read_frame(reader: ByteReader, deadline: float) -> tuple[bytes, str]:
+    """Read the len/payload/md5 of a frame whose sentinel has already passed.
 
-    Raises CaptureError on any framing, length, or md5 mismatch -- the caller writes
-    nothing in that case.
+    Raises CaptureError on any length or md5 mismatch -- the caller writes nothing
+    in that case.
     """
-    _sync_to_sentinel(reader, deadline)
     n = int.from_bytes(_read_exact(reader, LEN_FIELD_BYTES, deadline), "little")
     if n != DUMP_BYTES:
         raise CaptureError(f"frame len {n} != expected {DUMP_BYTES}")
@@ -128,6 +129,12 @@ def parse_dump_stream(reader: ByteReader, deadline: float) -> tuple[bytes, str]:
     return payload, computed_md5
 
 
+def parse_dump_stream(reader: ByteReader, deadline: float) -> tuple[bytes, str]:
+    """Read one verified frame from an already-triggered stream; return (payload, md5_hex)."""
+    _sync_to_sentinel(reader, deadline)
+    return read_frame(reader, deadline)
+
+
 def _next_run(manifest_path: Path, variant: str) -> int:
     """0-based count of existing records with this variant -- keeps filenames unique."""
     if not manifest_path.exists():
@@ -136,19 +143,11 @@ def _next_run(manifest_path: Path, variant: str) -> int:
                if rec.conditions.get("variant") == variant)
 
 
-def capture(port_name: str, variant: str, label: str, testbed: str,
-            capture_point: str, captures_dir: Path, baud: int) -> Path:
-    """Drive one capture end to end; return the written .bin path."""
+def save_capture(payload: bytes, md5_hex: str, variant: str, label: str,
+                 testbed: str, capture_point: str, captures_dir: Path) -> Path:
+    """Write one verified payload as a .bin + manifest record; return the .bin path."""
     if VARIANT_RE.fullmatch(variant) is None:
         raise CaptureError(f"variant tag must be [A-Za-z0-9.+-], got {variant!r}")
-
-    with serial.Serial(port_name, baud, timeout=SERIAL_READ_TIMEOUT_S) as port:
-        print(f"[capture] {port_name} @ {baud} 8N1 -- sending '{TRIGGER.decode()}' ...")
-        time.sleep(PORT_SETTLE_S)
-        port.reset_input_buffer()      # drop any stale banner bytes before triggering
-        port.write(TRIGGER)
-        payload, md5_hex = parse_dump_stream(port, time.monotonic() + TRANSFER_DEADLINE_S)
-    print(f"[capture] received {len(payload)} bytes, md5={md5_hex}")
 
     manifest_path = captures_dir / MANIFEST_NAME
     now = datetime.now()
@@ -174,6 +173,24 @@ def capture(port_name: str, variant: str, label: str, testbed: str,
     print(f"[capture] wrote {bin_path}")
     print(f"[capture] appended record to {manifest_path}")
     return bin_path
+
+
+def capture(port_name: str, variant: str, label: str, testbed: str,
+            capture_point: str, captures_dir: Path, baud: int) -> Path:
+    """Drive one capture end to end; return the written .bin path."""
+    if VARIANT_RE.fullmatch(variant) is None:
+        raise CaptureError(f"variant tag must be [A-Za-z0-9.+-], got {variant!r}")
+
+    with serial.Serial(port_name, baud, timeout=SERIAL_READ_TIMEOUT_S) as port:
+        print(f"[capture] {port_name} @ {baud} 8N1 -- sending '{TRIGGER.decode()}' ...")
+        time.sleep(PORT_SETTLE_S)
+        port.reset_input_buffer()      # drop any stale banner bytes before triggering
+        port.write(TRIGGER)
+        payload, md5_hex = parse_dump_stream(port, time.monotonic() + TRANSFER_DEADLINE_S)
+    print(f"[capture] received {len(payload)} bytes, md5={md5_hex}")
+
+    return save_capture(payload, md5_hex, variant, label, testbed,
+                        capture_point, captures_dir)
 
 
 def main() -> int:

@@ -111,7 +111,7 @@ static uint32_t  s_page_seq;       /* seq of the current page (next open = +1)  
 static uint32_t  s_boot_count;     /* this boot's number, stamped at page-opens */
 static uint32_t  s_op_count;       /* records fully programmed, lifetime        */
 static uint32_t  s_last_ms;        /* HAL tick of the last record               */
-static uint32_t  s_tick;           /* records this boot (drives refresh cadence)*/
+static uint32_t  s_tick;           /* lifetime record ticks (refresh cadence)   */
 static uint8_t   s_known_blank[NV_NUM_PAGES];  /* page verified/erased blank    */
 static uint8_t   s_fault;          /* a flash op failed: stop, don't corrupt    */
 static ChanStats s_stats[3];       /* temp / hum / press, this boot             */
@@ -314,10 +314,37 @@ void NvLogger_Init(void)
     }
   }
 
-  /* Stats and the generator start fresh each boot (the spec's per-boot rule);
-     all flash reads above happen before any write this boot, so the stale
+  /* Stats start fresh each boot (the spec's per-boot rule), but the waves RESUME
+     from the lifetime record count: every dataset capture reboots the board, so
+     a boot-reset phase would clip every wave to its first arc and the training
+     data would systematically miss wave states a long-running deployment visits
+     -- a false-positive trap. Refreshes in ticks 0..op-1 = ceil(op / EVERY).
+     All flash reads above happen before any write this boot, so the stale
      read-after-write hazard can't bite. */
-  s_last_ms = HAL_GetTick();
+  s_tick     = s_op_count;
+  s_ph_temp  = (s_op_count + NV_LOGGER_TEMP_EVERY - 1u) / NV_LOGGER_TEMP_EVERY;
+  s_ph_hum   = (s_op_count + NV_LOGGER_HUM_EVERY - 1u) / NV_LOGGER_HUM_EVERY;
+  s_ph_press = (s_op_count + NV_LOGGER_PRESS_EVERY - 1u) / NV_LOGGER_PRESS_EVERY;
+  s_lcg     ^= s_op_count;   /* jitter stream differs per boot, not a replay */
+
+  /* Prime the held values at the wave point of the last completed refresh
+     (phase-1). GOTCHA: a channel whose cadence isn't due on the first tick
+     would otherwise write its zero-initialized hold -- bit us as press=0
+     (out-of-range) records whenever op_count % 4 != 0 at boot. */
+  s_temp  = clampi(GEN_TEMP_MID
+                   + tri_wave((s_ph_temp > 0u) ? s_ph_temp - 1u : 0u,
+                              GEN_TEMP_PERIOD, GEN_TEMP_AMP)
+                   + jitter(GEN_TEMP_JIT), NV_TEMP_LO, NV_TEMP_HI);
+  s_hum   = clampi(GEN_HUM_MID - GEN_HUM_K * (s_temp - GEN_TEMP_MID)
+                   + tri_wave((s_ph_hum > 0u) ? s_ph_hum - 1u : 0u,
+                              GEN_HUM_PERIOD, GEN_HUM_AMP)
+                   + jitter(GEN_HUM_JIT), (int32_t)NV_HUM_LO, (int32_t)NV_HUM_HI);
+  s_press = clampi(GEN_PRESS_MID
+                   + tri_wave((s_ph_press > 0u) ? s_ph_press - 1u : 0u,
+                              GEN_PRESS_PERIOD, GEN_PRESS_AMP)
+                   + jitter(GEN_PRESS_JIT), (int32_t)NV_PRESS_LO, (int32_t)NV_PRESS_HI);
+
+  s_last_ms  = HAL_GetTick();
 
   snprintf(msg, sizeof(msg), "[NVLOG] init: seq=%lu boot=%lu op=%lu slot=%lu/%u period=%us\r\n",
            (unsigned long)s_page_seq, (unsigned long)s_boot_count, (unsigned long)s_op_count,

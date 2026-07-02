@@ -1,13 +1,15 @@
 """
-Off-device feature extraction: raw memory-dump bytes -> (40, 3) feature matrix.
+Off-device feature extraction: the 4 KB NV region's bytes -> (40, 3) feature matrix.
 
 Pipeline (see params.py for the frozen values):
-    bytes -> uint8 -> int16 -> /32768 float32
-          -> MFCC / mel / chroma_stft at SR=22050
-          -> time-average each to a 40-vector
-          -> column-stack in FEATURE_ORDER -> (40, 3)
+    4096 bytes -> uint8 -> int16 -> /32768 float32
+              -> MFCC / mel / chroma_stft at SR=22050
+              -> time-average each to a 40-vector
+              -> column-stack in FEATURE_ORDER -> (40, 3)
 
-The on-chip CMSIS-DSP port must produce matching numbers for the same bytes.
+Input is exactly the 4 KB NV window (offdevice.nv.parse.slice_nv cuts it out of a
+256 KB capture; the CLI below does that automatically). The on-chip CMSIS-DSP port
+must produce matching numbers for the same bytes.
 """
 
 from pathlib import Path
@@ -55,17 +57,24 @@ def bytes_to_signal(raw: BytesLike) -> Signal:
 
 
 def extract_features(source: Source) -> Signal:
-    """Raw dump bytes (or a path to a .bin) -> deterministic (40, 3) float32.
+    """The NV window's bytes (or a path to a 4 KB .bin) -> deterministic (40, 3) float32.
 
-    Columns follow params.FEATURE_ORDER: [mfcc, mel, chroma_stft].
+    Columns follow params.FEATURE_ORDER: [mfcc, mel, chroma_stft]. Rejects any
+    input that isn't exactly the 4 KB window — a whole 256 KB capture here is a
+    caller bug (slice the NV region first), not a bigger window.
     """
     if isinstance(source, (str, Path)):
         source = load_dump(source)
     y = bytes_to_signal(source)
+    if y.size != params.WINDOW_BYTES:
+        raise ValueError(
+            f"expected the {params.WINDOW_BYTES}-byte NV window, got {y.size} bytes"
+        )
 
     mfcc = librosa.feature.mfcc(
         y=y, sr=params.SR, n_mfcc=params.N_MFCC,
         n_fft=params.N_FFT, hop_length=params.HOP_LENGTH,
+        n_mels=params.MFCC_INTERNAL_N_MELS, fmax=params.MFCC_FMAX,
     )
     mel = librosa.feature.melspectrogram(
         y=y, sr=params.SR, n_mels=params.N_MELS, fmax=params.FMAX,
@@ -100,11 +109,16 @@ def feature_stats(feats: Signal) -> dict[str, dict[str, float]]:
 if __name__ == "__main__":
     import sys
 
+    from offdevice.nv.parse import slice_nv
+
     if len(sys.argv) != 2:
-        print("usage: python -m offdevice.features.extract <dump.bin>")
+        print("usage: python -m offdevice.features.extract <capture.bin | nv-slice.bin>")
         raise SystemExit(2)
 
-    feats = extract_features(sys.argv[1])
+    data = load_dump(sys.argv[1])
+    if len(data) != params.WINDOW_BYTES:
+        data = slice_nv(data)   # a full 256 KB capture: cut out the NV region
+    feats = extract_features(data)
     print(f"shape={feats.shape} dtype={feats.dtype}")
     for name, s in feature_stats(feats).items():
         print(f"  {name:12s} min={s['min']:+.6e} max={s['max']:+.6e}")

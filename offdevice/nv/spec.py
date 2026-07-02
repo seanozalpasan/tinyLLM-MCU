@@ -110,9 +110,11 @@ BLANK_RECORD = bytes([ERASED_BYTE]) * RECORD_SIZE   # an unwritten slot reads as
 # ---- update-rate presets (period between records, seconds) -----------------------
 # The rate is an operating knob, not layout: flash ages by ERASE COUNT (pages are
 # rated ~10k cycles minimum; each page erases once per RECORDS_TOTAL records). At
-# 1 s the ring wraps in ~4 min -- bring-up and fast benign captures; at 90 s each
-# page erases every ~6.2 h => ~7 years to the rated minimum. The training set
-# must cover every rate regime we claim to support.
+# 1 s the ring wraps in ~4 min -- bring-up only, never training data. At 45 s each
+# page erases every ~3.1 h => ~3.5 years to the rated minimum, and a fully fresh
+# benign snapshot exists every ring turnover (~3.1 h) -- the balance between a
+# credible device lifetime and dataset accumulation speed. The model trains at
+# the deploy rate only (train == infer distribution).
 
 RATE_DEV_PERIOD_S = 1
-RATE_DEPLOY_PERIOD_S = 90
+RATE_DEPLOY_PERIOD_S = 45

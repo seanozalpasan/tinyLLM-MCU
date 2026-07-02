@@ -18,10 +18,11 @@
 #define NV_LOGGER  1
 
 /* Record period: pick a preset from nv_spec.h, or any custom seconds value.
-   NV_RATE_DEV_PERIOD_S (1 s) wraps the ring in ~4 min for bring-up and fast
-   benign captures; NV_RATE_DEPLOY_PERIOD_S (90 s) is the ~7-year-endurance
-   deployment default. The training set must cover every rate we claim. */
-#define NV_LOGGER_PERIOD_S   NV_RATE_DEV_PERIOD_S
+   NV_RATE_DEV_PERIOD_S (1 s) wraps the ring in ~4 min for bring-up only;
+   NV_RATE_DEPLOY_PERIOD_S (45 s) is the ~3.5-year-endurance deployment default.
+   The model trains at the deploy rate only -- the dev preset never produces
+   training data, or the model trains on one distribution and infers on another. */
+#define NV_LOGGER_PERIOD_S   NV_RATE_DEPLOY_PERIOD_S
 
 /* Per-channel refresh cadence, in records: a channel's value is re-generated
    every Nth record and HELD in between, giving three interleaved byte

@@ -83,3 +83,25 @@ void Dump_NSFlash_Service(UART_HandleTypeDef *huart)
     if (cmd == 'D' || cmd == 'd') { Dump_NSFlash_ToUart(huart); }
   }
 }
+
+void Dump_NSFlash_BootWindow(UART_HandleTypeDef *huart)
+{
+  uint8_t  cmd;
+  uint32_t start = HAL_GetTick();
+
+  Dump_HashInit();
+  printf("[S ] capture window: send 'D' within %lu ms for one NS-flash dump.\r\n",
+         (unsigned long)DUMP_BOOT_WINDOW_MS);
+
+  while ((HAL_GetTick() - start) < DUMP_BOOT_WINDOW_MS)
+  {
+    if (HAL_UART_Receive(huart, &cmd, 1u, 50u) != HAL_OK) { continue; }
+    if (cmd == 'D' || cmd == 'd')
+    {
+      /* The NS workload hasn't started this boot, so the NV ring is frozen for
+         the whole transfer; extra queued 'D's are dropped with the window. */
+      Dump_NSFlash_ToUart(huart);
+      break;
+    }
+  }
+}

@@ -73,9 +73,10 @@ def test_channel_ranges_are_bme280() -> None:
 
 def test_rate_presets_pinned() -> None:
     # Deliberately pinned: changing a preset is a data-plan decision (benign
-    # coverage + flash endurance), not a refactor.
+    # coverage + flash endurance), not a refactor. 45 s balances endurance
+    # (~3.5 yr to rated wear) against dataset yield (ring turnover ~3.1 h).
     assert spec.RATE_DEV_PERIOD_S == 1
-    assert spec.RATE_DEPLOY_PERIOD_S == 90
+    assert spec.RATE_DEPLOY_PERIOD_S == 45
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda p: p.parts[-4])
