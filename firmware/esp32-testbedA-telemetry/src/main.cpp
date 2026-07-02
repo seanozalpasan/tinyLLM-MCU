@@ -2,12 +2,16 @@
 //
 // Pipeline:  STM32 (USART3) --UART--> ESP32 (this) --Wi-Fi/TCP--> ncat (laptop).
 //
-// The STM32 sends ONE 9-byte telemetry frame once per second over the mikroBUS UART.
-// We accumulate UART bytes, find the 0xA5 0x5A magic, validate the XOR checksum, decode
-// seq/value, and forward a human-readable line to the laptop listener (tools/listen.py, or ncat).
+// The STM32 sends ONE 23-byte telemetry frame per logged sensor record (once per record
+// period: 1 s dev / 90 s deploy) over the mikroBUS UART -- the SAME reading its NV logger
+// just wrote to flash (one source, two sinks). We accumulate UART bytes, find the
+// 0xA5 0x5A magic, validate the XOR checksum, decode, and forward a human-readable line
+// to the laptop listener (tools/listen.py, or ncat).
 //
-//   Frame (9 bytes):  [0]=0xA5  [1]=0x5A  [2..5]=seq u32 LE  [6..7]=value u16 LE
-//                     [8]=XOR of bytes 0..7
+//   Frame (23 bytes): [0]=0xA5 [1]=0x5A [2..5]=seq u32 (lifetime record count)
+//                     [6..9]=ts u32 (s since boot)  [10..13]=temp i32 (degC x100)
+//                     [14..17]=hum u32 (%RH x100)   [18..21]=press u32 (hPa x100)
+//                     [22]=XOR of bytes 0..21 -- all little-endian
 //
 // Magic = frame-sync sentinel ("is a real frame starting here, am I aligned?").
 // Checksum = content integrity ("did the bytes arrive uncorrupted?"). We scan the RX
@@ -36,7 +40,7 @@ static const int HS_OUT_PIN = 21;
 // ---- Telemetry frame layout (must match the STM32 Tele_BuildFrame contract) ----
 static const uint8_t  TELE_MAGIC0  = 0xA5;
 static const uint8_t  TELE_MAGIC1  = 0x5A;
-static const size_t   TELE_FRAME_LEN = 9;
+static const size_t   TELE_FRAME_LEN = 23;
 
 // ---- Networking ----
 static WiFiClient client;
@@ -71,6 +75,12 @@ static bool ensureTcp() {
   return true;
 }
 
+// Little-endian u32 at p (the STM32 packs every payload field this way).
+static uint32_t rdU32(const uint8_t* p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
 // Scan [0, n) for a frame whose magic AND XOR checksum both pass.
 // Returns the start index of the first valid frame, or -1 if none.
 static int findValidFrame(const uint8_t* buf, size_t n) {
@@ -82,10 +92,10 @@ static int findValidFrame(const uint8_t* buf, size_t n) {
       continue;  // not a frame start -- keep sliding (this is the magic's whole job)
     }
     uint8_t x = 0;
-    for (size_t k = 0; k < 8; ++k) {
+    for (size_t k = 0; k < TELE_FRAME_LEN - 1; ++k) {
       x ^= buf[i + k];
     }
-    if (x == buf[i + 8]) {
+    if (x == buf[i + TELE_FRAME_LEN - 1]) {
       return (int)i;  // magic located AND payload integrity verified
     }
     // Magic matched but checksum failed: corrupted, or a coincidental 0xA5 0x5A in
@@ -178,22 +188,26 @@ void loop() {
 
   // Decode the validated payload (little-endian, matching the STM32 builder).
   const uint8_t* f = &acc[idx];
-  const uint32_t seq   = (uint32_t)f[2] | ((uint32_t)f[3] << 8) |
-                         ((uint32_t)f[4] << 16) | ((uint32_t)f[5] << 24);
-  const uint16_t value = (uint16_t)f[6] | ((uint16_t)f[7] << 8);
+  const uint32_t seq   = rdU32(&f[2]);
+  const uint32_t ts    = rdU32(&f[6]);
+  const int32_t  temp  = (int32_t)rdU32(&f[10]);  // degC x100
+  const uint32_t hum   = rdU32(&f[14]);           // %RH  x100
+  const uint32_t press = rdU32(&f[18]);           // hPa  x100
   frames_ok++;
 
-  Serial.printf("UART ok: seq=%lu val=%u (off=%d) [ok=%lu bad=%lu]\n",
-                (unsigned long)seq, (unsigned)value, idx,
+  Serial.printf("UART ok: seq=%lu ts=%lu T=%.2fC RH=%.2f%% P=%.2fhPa (off=%d) [ok=%lu bad=%lu]\n",
+                (unsigned long)seq, (unsigned long)ts,
+                temp / 100.0, hum / 100.0, press / 100.0, idx,
                 (unsigned long)frames_ok, (unsigned long)frames_bad);
 
-  // Forward a decoded, human-readable line to ncat. (Decoded text rather than raw bytes
-  // so the listener is verifiable by eye and lines up with the STM32 console; swap to
-  // raw payload later when real telemetry replaces the dummy value.)
+  // Forward a decoded, human-readable line to ncat -- verifiable by eye against both the
+  // STM32 console line and, after a flash dump, the NV record bytes themselves. (Display
+  // floats only; the wire and the flash stay fixed-point integer.)
   if (client.connected()) {
-    char line[48];
-    const int n = snprintf(line, sizeof(line), "seq=%lu val=%u\n",
-                           (unsigned long)seq, (unsigned)value);
+    char line[96];
+    const int n = snprintf(line, sizeof(line), "seq=%lu ts=%lu T=%.2f RH=%.2f P=%.2f\n",
+                           (unsigned long)seq, (unsigned long)ts,
+                           temp / 100.0, hum / 100.0, press / 100.0);
     client.write(reinterpret_cast<const uint8_t*>(line), (size_t)n);
   }
 

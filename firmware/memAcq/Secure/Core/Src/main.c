@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include "flash_dump.h"
+#include "static_hash.h"   /* Part-1 IDS: static NS-region SHA-256 vs golden */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -189,6 +190,10 @@ int main(void)
   MX_USART1_UART_Init();
 
   /* USER CODE BEGIN 2 */
+
+  /* Part-1 IDS: verify (or enroll) the static NS-region hash first thing after
+     the console is up, in every build -- dump builds included. */
+  StaticHash_BootCheck();
 
   /* Bring up OSPI XIP at 0x90000000. Must run before HAL_SuspendTick() (it uses HAL_Delay).
      Leaves OCTOSPI1 in memory-mapped mode so the non-secure world can read it after the jump. */
@@ -370,14 +375,13 @@ static void MX_GTZC_S_Init(void)
   }
   /* USER CODE BEGIN GTZC_S_Init 2 */
 
-#if DUMP_NSFLASH
-  /* The dump path hashes in the secure world, so the HASH peripheral must be secure
-     (same pattern as the USART1 grant above). */
+  /* The HASH peripheral must be secure for both of its users: the dump path's
+     transfer MD5 and the Part-1 static-integrity SHA-256, which runs in EVERY
+     build (same pattern as the USART1 grant above). */
   if (HAL_GTZC_TZSC_ConfigPeriphAttributes(GTZC_PERIPH_HASH, GTZC_TZSC_PERIPH_SEC | GTZC_TZSC_PERIPH_NPRIV) != HAL_OK)
   {
     Error_Handler();
   }
-#endif
 
   /* Open OCTOSPI1 to non-secure. External memory defaults to SECURE in GTZC, but SAU region 4
      marks 0x60000000-0x9FFFFFFF non-secure -- so every access to 0x90000000 (even from secure
