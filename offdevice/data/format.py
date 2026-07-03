@@ -33,8 +33,9 @@ REFS_DUMP_BYTES = DUMP_BYTES
 # against that -- so a dataset can mix sizes and a change here never silently
 # invalidates older captures.
 
-# Label vocabulary. Int codes follow MARS (benign=1, anomalous=0); the LLM emits
-# the WORD, the int is only for off-device metrics/bookkeeping.
+# Label vocabulary. Int codes follow MARS (benign=1, anomalous=0); the ints are
+# off-device metrics/bookkeeping only -- the on-chip verdict is binary and never
+# reads these labels.
 LABELS: tuple[str, str] = ("benign", "anomalous")
 LABEL_TO_INT: dict[str, int] = {"benign": 1, "anomalous": 0}
 

@@ -5,7 +5,9 @@ The chosen filenames go to a committed .txt so "the exam set was picked before
 studying" is a verifiable property of the repo, not a promise: fit.py excludes these
 files from training and from the threshold, and score.py grades them exactly once,
 after the threshold is chosen, as the honest false-positive check. The pick is
-stratified by ring fill state so every benign regime appears on the exam. An existing
+stratified by ring fill state so every benign regime appears on the exam, and the
+file records WHICH variants the split saw -- fit.py refuses to train on variants
+beyond that set, because their captures would carry zero exam coverage. An existing
 list is never overwritten without --force -- a re-split invalidates any model already
 fitted against the old one.
 
@@ -21,7 +23,15 @@ from pathlib import Path
 
 import numpy as np
 
-from offdevice.model.dataset import DEFAULT_MANIFEST, FILL_STATES, Sample, load_samples
+from offdevice.model.dataset import (
+    DEFAULT_MANIFEST,
+    DEFAULT_QUARANTINE,
+    FILL_STATES,
+    Sample,
+    load_samples,
+    read_name_list,
+    read_quarantine,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_HOLDOUT = REPO_ROOT / "offdevice" / "data" / "holdout.txt"
@@ -29,15 +39,26 @@ DEFAULT_HOLDOUT = REPO_ROOT / "offdevice" / "data" / "holdout.txt"
 DEFAULT_FRACTION = 0.20
 DEFAULT_SEED = 2026
 
+# The machine-readable header line recording the variants the split saw.
+_VARIANTS_PREFIX = "# variants:"
+
 
 def read_holdout(path: str | Path) -> frozenset[str]:
     """The held-out bare filenames from a holdout .txt ('#' comments ignored)."""
-    names: set[str] = set()
+    return read_name_list(path)
+
+
+def read_holdout_variants(path: str | Path) -> frozenset[str] | None:
+    """The variants the split saw, from the '# variants:' header (None if absent).
+
+    fit.py refuses variants outside this set: the split never stratified them, so
+    every one of their captures would train with zero holdout-exam coverage.
+    """
     for raw in Path(path).read_text(encoding="utf-8").splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if line:
-            names.add(line)
-    return frozenset(names)
+        if raw.startswith(_VARIANTS_PREFIX):
+            names = raw[len(_VARIANTS_PREFIX):].split(",")
+            return frozenset(v.strip() for v in names if v.strip())
+    return None
 
 
 def choose_holdout(
@@ -84,8 +105,10 @@ def write_holdout(
         "# exactly once (offdevice/model/score.py), after the threshold is chosen,",
         "# as the honest false-positive check. Everything else in the manifest with",
         "# the variants below is training data.",
+        # Machine-read by read_holdout_variants -- keep the "# variants:" prefix.
+        f"{_VARIANTS_PREFIX} {','.join(variants)}",
         f"# created={datetime.now().isoformat(timespec='seconds')} seed={seed} "
-        f"fraction={fraction} variants={','.join(variants)}",
+        f"fraction={fraction}",
         f"# {len(chosen)} of {n_total} captures held out -- " + "; ".join(notes),
     ]
     lines += [f"{s.record.file}  # {s.fill_state}" for s in chosen]
@@ -103,6 +126,8 @@ def main() -> int:
                     help="held-out share per stratum (default 0.20)")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED,
                     help="RNG seed -- recorded in the file so the pick is reproducible")
+    ap.add_argument("--allow-out-of-range", action="store_true",
+                    help="split despite captures whose values leave their legal ranges")
     ap.add_argument("--force", action="store_true",
                     help="overwrite an existing list (invalidates any already-fitted model)")
     args = ap.parse_args()
@@ -113,9 +138,24 @@ def main() -> int:
               f"is deliberate.")
         return 1
 
-    samples = load_samples(args.manifest, tuple(args.variants))
+    quarantine = read_quarantine()
+    if quarantine:
+        print(f"[split] {len(quarantine)} quarantined name(s) excluded "
+              f"({DEFAULT_QUARANTINE.name})")
+    samples = load_samples(args.manifest, tuple(args.variants), quarantine=quarantine)
     if len(samples) < 2:
         print(f"[split] need at least 2 matching captures, found {len(samples)}")
+        return 1
+
+    # Symmetric with fit.py's training refusal: an out-of-range capture placed in
+    # the HOLDOUT would score as a large distance later and inflate the reported
+    # false-positive rate of a threshold that never saw its like.
+    bad_range = [s.record.file for s in samples if not s.range_ok]
+    if bad_range and not args.allow_out_of_range:
+        print(f"[split] {len(bad_range)} capture(s) hold out-of-range values -- holding "
+              f"one out would pollute the false-positive exam. Inspect them "
+              f"(offdevice.model.dataset) or pass --allow-out-of-range: "
+              f"{bad_range[:3]}{'...' if len(bad_range) > 3 else ''}")
         return 1
 
     chosen, notes = choose_holdout(samples, args.fraction, args.seed)

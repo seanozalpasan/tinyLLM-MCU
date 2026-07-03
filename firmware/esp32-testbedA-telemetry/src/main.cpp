@@ -3,7 +3,7 @@
 // Pipeline:  STM32 (USART3) --UART--> ESP32 (this) --Wi-Fi/TCP--> ncat (laptop).
 //
 // The STM32 sends ONE 23-byte telemetry frame per logged sensor record (once per record
-// period: 1 s dev / 90 s deploy) over the mikroBUS UART -- the SAME reading its NV logger
+// period: 1 s dev / 45 s deploy) over the mikroBUS UART -- the SAME reading its NV logger
 // just wrote to flash (one source, two sinks). We accumulate UART bytes, find the
 // 0xA5 0x5A magic, validate the XOR checksum, decode, and forward a human-readable line
 // to the laptop listener (tools/listen.py, or ncat).
@@ -105,8 +105,9 @@ static int findValidFrame(const uint8_t* buf, size_t n) {
 }
 
 // ---- UART RX from the STM32 (USART3 over the mikroBUS UART) + Wi-Fi/TCP relay. The STM32
-// sends a 9-byte frame once/sec; we accumulate UART bytes, scan for the 0xA5 0x5A magic +
-// XOR checksum (findValidFrame), decode, print, and forward to ncat. ----
+// sends one 23-byte frame per record period (see the file header); we accumulate UART bytes,
+// scan for the 0xA5 0x5A magic + XOR checksum (findValidFrame), decode, print, and forward
+// to ncat. ----
 static const int PIN_UART_RX = 23;     // g23 <- mikroBUS TX pad (STM32 PC10 / USART3_TX)
 static const int PIN_UART_TX = 17;     // g17 -> mikroBUS RX pad (STM32 PC11 / USART3_RX)
 static uint8_t  acc[64];               // rolling accumulator for incoming UART bytes

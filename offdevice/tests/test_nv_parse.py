@@ -49,7 +49,7 @@ def test_blank_region_parses_empty() -> None:
     view = parse_region(b"\xff" * spec.REGION_SIZE)
     assert view.current is None
     assert all(p.header is None and p.records == () and p.tail_clean and p.blank
-               for p in view.pages)
+               and p.pad_clean for p in view.pages)
     assert records_chronological(view) == ()
 
 
@@ -82,6 +82,19 @@ def test_foreign_header_rejected() -> None:
     page = parse_page(leftover)
     assert page.header is None
     assert page.blank is False   # bytes present -> FOREIGN, not blank
+
+
+def test_header_pad_state_reported_not_judged() -> None:
+    # struct's "x" skips the 12 reserve bytes on unpack, so their state surfaces as
+    # a separate pad_clean fact. The parser stays neutral: the header still parses
+    # (the eval injector needs that); only the training gate rejects a dirty pad.
+    recs = [make_record(1, 2200, 4500, 101325)]
+    page = bytearray(make_page(make_header(), recs))
+    assert parse_page(bytes(page)).pad_clean is True
+    page[spec.HEADER_SIZE - 1] = 0xAB          # last pad byte no longer 0x00
+    view = parse_page(bytes(page))
+    assert view.pad_clean is False
+    assert view.header is not None             # reported, not rejected
 
 
 def test_dirty_tail_flagged_not_repaired() -> None:

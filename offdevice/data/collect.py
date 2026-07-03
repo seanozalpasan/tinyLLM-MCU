@@ -19,8 +19,9 @@ Run (repo root; needs only pyserial + STM32CubeProgrammer installed):
     python -m offdevice.data.collect nv45s-smoke --interval 0.05 --count 3
 
 --fresh erases the two NV pages first (a virgin ring; the following captures walk
-the fill states as it refills). Stop an open-ended run with Ctrl+C; the manifest
-is appended per capture, so a killed run loses nothing already saved.
+the fill states as it refills), bracketing the erase with resets so the erase never
+races the running logger. Stop an open-ended run with Ctrl+C; the manifest is
+appended per capture, so a killed run loses nothing already saved.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from offdevice.data.capture import (
     DEFAULT_CAPTURES_DIR,
     SENTINEL,
     TRIGGER,
+    VARIANT_RE,
     CaptureError,
     read_frame,
     save_capture,
@@ -154,6 +156,16 @@ def _release_awake() -> None:
 def run(cli: Path, port_name: str, baud: int, variant: str, captures_dir: Path,
         interval_h: float, count: int | None, fresh: bool) -> int:
     """The collection loop; returns a process exit code."""
+    # Fail bad arguments here, before any board interaction: an invalid tag would
+    # otherwise surface in save_capture AFTER a successful reset + transfer and
+    # burn the whole retry budget (~11 min) on a typo.
+    if VARIANT_RE.fullmatch(variant) is None:
+        print(f"[collect] variant tag must be [A-Za-z0-9.+-], got {variant!r}", flush=True)
+        return 2
+    if interval_h <= 0:
+        print(f"[collect] --interval must be positive hours, got {interval_h}", flush=True)
+        return 2
+
     captures_dir.mkdir(parents=True, exist_ok=True)
     log_path = captures_dir / LOG_NAME
 
@@ -164,9 +176,21 @@ def run(cli: Path, port_name: str, baud: int, variant: str, captures_dir: Path,
     _log(log_path, f"collect start: variant={variant} interval={interval_h}h "
                    f"count={'unbounded' if count is None else count} fresh={fresh}")
     if fresh:
-        # Erase THEN reset (via the first cycle) -- the reboot re-inits the logger
-        # on the blank pages, so the ring restarts cleanly from a virgin state.
-        _run_cli(cli, ERASE_ARGS)
+        # Reset BEFORE erasing: a freshly booted logger leaves the NV pages (and
+        # the FLASH_NS control registers) untouched for its first ~45 s, so the
+        # erase runs against a quiet target. Erasing under a RUNNING logger races
+        # its 45 s tick -- a record programmed into the just-erased (headerless)
+        # page makes capture 1 parse as FOREIGN and poisons the campaign. Reset
+        # AGAIN after the erase so the logger re-inits on the blank ring at once;
+        # without it, a delayed first cycle (e.g. one 60 s retry) would leave the
+        # pre-erase RAM head live past its 45 s tick and reopen the same race.
+        try:
+            _run_cli(cli, RESET_ARGS)
+            _run_cli(cli, ERASE_ARGS)
+            _run_cli(cli, RESET_ARGS)
+        except (CollectError, subprocess.TimeoutExpired) as exc:
+            _log(log_path, f"--fresh erase FAILED (board untouched beyond a reset): {exc}")
+            return 1
         _log(log_path, "NV pages 254/255 (0x0807F000..0x0807FFFF) erased -- virgin ring")
 
     done = 0

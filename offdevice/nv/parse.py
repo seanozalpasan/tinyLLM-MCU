@@ -31,6 +31,8 @@ class PageView:
     records: tuple[dict[str, int], ...]   # non-blank slots up to the head, in order
     tail_clean: bool                      # nothing written after the first blank slot
     blank: bool                           # the whole page reads erased (all 0xFF)
+    pad_clean: bool                       # header pad bytes all HEADER_PAD_FILL
+                                          # (vacuously True without a valid header)
 
 
 @dataclass(frozen=True)
@@ -82,8 +84,15 @@ def parse_page(page: bytes) -> PageView:
             tail_clean = False   # a written slot AFTER the head: the logger never does this
         else:
             records.append(dict(zip(spec.RECORD_FIELDS, struct.unpack(spec.RECORD_FMT, raw))))
-    return PageView(parse_header(page), tuple(records), tail_clean,
-                    page == b"\xff" * spec.PAGE_SIZE)
+    header = parse_header(page)
+    # struct's "x" skips the pad on unpack, so surface its state as a separate
+    # fact: the firmware programs it as HEADER_PAD_FILL, and anything else means
+    # a rewritten/foreign header. Reported, never judged -- the training gate
+    # (model/dataset.py) decides; the eval injector needs this parser neutral.
+    pad = page[spec.HEADER_SIZE - spec.HEADER_PAD : spec.HEADER_SIZE]
+    pad_clean = header is None or pad == bytes([spec.HEADER_PAD_FILL]) * spec.HEADER_PAD
+    return PageView(header, tuple(records), tail_clean,
+                    page == b"\xff" * spec.PAGE_SIZE, pad_clean)
 
 
 def parse_region(nv: bytes) -> RegionView:

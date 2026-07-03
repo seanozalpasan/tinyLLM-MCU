@@ -9,6 +9,7 @@ Run from the repo root (so `import offdevice...` resolves):
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from offdevice.data.format import (
 from offdevice.data.loader import iter_dataset, load_dump_bytes
 from offdevice.data.manifest import append_record, read_manifest, write_manifest
 from offdevice.data.validate_refs import EXPECTED_REFS_DUMPS, find_refs_dumps
+from offdevice.nv.parse import DUMP_SIZE
 
 
 # A real verified chip md5 of an NS-flash image -- a genuine 32-hex digest, so the
@@ -122,6 +124,17 @@ def test_manifest_bad_line_reports_lineno(tmp_path: Path) -> None:
         read_manifest(manifest)
 
 
+def test_manifest_wrong_typed_field_reports_lineno(tmp_path: Path) -> None:
+    # A wrong-TYPED field (here conditions as an int) raises TypeError inside
+    # from_json_obj -- it must surface with the same file:line context, not crash.
+    obj = _record().to_json_obj()
+    obj["conditions"] = 5
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(json.dumps(obj) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r":1: bad manifest record"):
+        read_manifest(manifest)
+
+
 def test_loader_validates_length(tmp_path: Path) -> None:
     short = tmp_path / "short.bin"
     short.write_bytes(b"\x00" * 1024)
@@ -131,6 +144,39 @@ def test_loader_validates_length(tmp_path: Path) -> None:
         load_dump_bytes(short)
     # explicit expect_bytes=None disables the check
     assert len(load_dump_bytes(short, expect_bytes=None)) == 1024
+
+
+def test_loader_verifies_md5(tmp_path: Path) -> None:
+    # The manifest fingerprint is re-checked on READ: a file corrupted or
+    # overwritten after capture time fails loudly instead of training silently.
+    blob = b"\x5a" * 1024
+    path = tmp_path / "x.bin"
+    path.write_bytes(blob)
+    good = hashlib.md5(blob).hexdigest()
+    assert load_dump_bytes(path, expect_bytes=None, expect_md5=good) == blob
+    with pytest.raises(ValueError, match="md5"):
+        load_dump_bytes(path, expect_bytes=None, expect_md5="b" * 32)
+
+
+def test_iter_dataset_rejects_corrupted_file(tmp_path: Path) -> None:
+    blob = b"\x11" * 1024
+    (tmp_path / "x.bin").write_bytes(blob)
+    manifest = tmp_path / "manifest.jsonl"
+    rec = DumpRecord(file="x.bin", label="benign", testbed="tbA", capture_point="t",
+                     mem_range="t", md5=hashlib.md5(blob).hexdigest(), ts="t",
+                     n_bytes=len(blob))
+    write_manifest(manifest, [rec])
+    assert len(list(iter_dataset(manifest))) == 1     # true digest passes
+    (tmp_path / "x.bin").write_bytes(b"\x22" * 1024)  # corrupt after capture
+    with pytest.raises(ValueError, match="md5"):
+        list(iter_dataset(manifest))
+
+
+def test_dump_size_constants_agree() -> None:
+    # parse.DUMP_SIZE (spec-derived: the NV region ends the image) and
+    # format.DUMP_BYTES (the capture wire contract) are defined independently and
+    # both load-bearing -- they must be the same number.
+    assert DUMP_SIZE == DUMP_BYTES
 
 
 # --- refs integration (skipped if the read-only refs checkout is absent) -----

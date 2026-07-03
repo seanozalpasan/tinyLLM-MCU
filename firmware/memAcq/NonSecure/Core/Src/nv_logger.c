@@ -44,6 +44,19 @@
 #define GEN_PRESS_PERIOD  480
 #define GEN_PRESS_JIT       2
 
+/* tri_wave needs an even period (period/2 is the exact apex) that is >= 2
+   (period 1 would divide by zero). Locked at compile time, editor-safe the same
+   way nv_spec.h's NV_LAYOUT_LOCK is (CubeIDE's indexer chokes on a bare
+   _Static_assert; GCC accepts either branch). */
+#ifdef __CDT_PARSER__
+#define GEN_PERIOD_LOCK(tag, p)  typedef char gen_period_lock_##tag[((p) >= 2 && (p) % 2 == 0) ? 1 : -1]
+#else
+#define GEN_PERIOD_LOCK(tag, p)  _Static_assert((p) >= 2 && (p) % 2 == 0, "tri_wave period must be even and >= 2: " #tag)
+#endif
+GEN_PERIOD_LOCK(temp,  GEN_TEMP_PERIOD);
+GEN_PERIOD_LOCK(hum,   GEN_HUM_PERIOD);
+GEN_PERIOD_LOCK(press, GEN_PRESS_PERIOD);
+
 /* ===== NS-flash program/erase primitives (from the static-proof demo) ===== */
 
 #define NV_ERASED_DW  0xFFFFFFFFFFFFFFFFULL   /* an un-programmed doubleword */
@@ -111,6 +124,8 @@ static uint32_t  s_page_seq;       /* seq of the current page (next open = +1)  
 static uint32_t  s_boot_count;     /* this boot's number, stamped at page-opens */
 static uint32_t  s_op_count;       /* records fully programmed, lifetime        */
 static uint32_t  s_last_ms;        /* HAL tick of the last record               */
+static uint32_t  s_ms_hi;          /* upper word of the 64-bit uptime in ms     */
+static uint32_t  s_ms_last;        /* last raw HAL tick seen (wrap detector)    */
 static uint32_t  s_tick;           /* lifetime record ticks (refresh cadence)   */
 static uint8_t   s_known_blank[NV_NUM_PAGES];  /* page verified/erased blank    */
 static uint8_t   s_fault;          /* a flash op failed: stop, don't corrupt    */
@@ -267,9 +282,12 @@ void NvLogger_Init(void)
   if (!v0 && !v1)
   {
     /* Virgin flash or foreign leftovers (e.g. the old proof demo's append log):
-       wipe so dumps only ever contain spec-defined bytes. */
+       wipe so dumps only ever contain spec-defined bytes. Already-blank pages
+       (routine after a host-side --fresh erase) are skipped -- erase cycles are
+       the wear budget, and a blank page needs none. */
     Nv_Unlock();
-    if (Nv_ErasePage(NV_PAGE0_BASE) != 0 || Nv_ErasePage(NV_PAGE1_BASE) != 0) { fault("erase"); }
+    if (!page_blank(NV_PAGE0_BASE) && (Nv_ErasePage(NV_PAGE0_BASE) != 0)) { fault("erase"); }
+    if (!page_blank(NV_PAGE1_BASE) && (Nv_ErasePage(NV_PAGE1_BASE) != 0)) { fault("erase"); }
     Nv_Lock();
     s_known_blank[0] = 1u;
     s_known_blank[1] = 1u;
@@ -345,6 +363,7 @@ void NvLogger_Init(void)
                    + jitter(GEN_PRESS_JIT), (int32_t)NV_PRESS_LO, (int32_t)NV_PRESS_HI);
 
   s_last_ms  = HAL_GetTick();
+  s_ms_last  = s_last_ms;   /* seed the 64-bit uptime wrap detector (see Poll) */
 
   snprintf(msg, sizeof(msg), "[NVLOG] init: seq=%lu boot=%lu op=%lu slot=%lu/%u period=%us\r\n",
            (unsigned long)s_page_seq, (unsigned long)s_boot_count, (unsigned long)s_op_count,
@@ -358,7 +377,16 @@ int NvLogger_Poll(NvReading *out)
   union { NvRecord r; uint64_t dw[NV_RECORD_SIZE / 8u]; } u;
   int err = 0;
 
+  /* Extend the tick to 64 bits BEFORE any early return: HAL_GetTick() is u32
+     MILLISECONDS and wraps at 49.7 days, and a wrapped ts would mimic the exact
+     non-monotonic-timestamp anomaly the detector hunts (the byte spec promises
+     ts never wraps). Poll runs every main-loop pass (~50 ms), so a raw wrap
+     cannot slip between two observations. */
+  if (now < s_ms_last) { s_ms_hi++; }
+  s_ms_last = now;
+
   if (s_fault != 0u) { return 0; }
+  /* u32 modular subtraction stays correct across the raw-tick wrap. */
   if ((now - s_last_ms) < (NV_LOGGER_PERIOD_S * 1000u)) { return 0; }
   s_last_ms = now;
 
@@ -374,7 +402,7 @@ int NvLogger_Poll(NvReading *out)
     if (page_open_next() != 0) { fault("page-open"); return 0; }
   }
 
-  u.r.ts    = now / 1000u;   /* u32 seconds since boot */
+  u.r.ts    = (uint32_t)((((uint64_t)s_ms_hi << 32) | now) / 1000u);   /* u32 s since boot, wrap-free */
   u.r.temp  = s_temp;
   u.r.hum   = (uint32_t)s_hum;
   u.r.press = (uint32_t)s_press;

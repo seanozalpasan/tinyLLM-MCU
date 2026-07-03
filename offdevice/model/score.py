@@ -5,7 +5,10 @@ Two uses: (1) the ONE-shot holdout check after a threshold is agreed -- fit.py n
 reads holdout bytes, so this is the only place the exam set is graded (grade it once;
 repeated peeking while adjusting the threshold turns the exam into more training
 data); and (2) ad-hoc scoring of any capture during eval or debugging. Prints one
-line per file: distance, threshold, verdict.
+line per file: distance, threshold, verdict. Holdout runs are cross-checked against
+the artifact: the list must be the one the fit excluded, and none of its names may
+be quarantined -- otherwise the false-positive number the exam produces is not the
+model's.
 
     python -m offdevice.model.score offdevice\\model\\artifacts\\mahalanobis.npz --holdout offdevice\\data\\holdout.txt
     python -m offdevice.model.score offdevice\\model\\artifacts\\mahalanobis.npz <capture.bin> [...]
@@ -21,10 +24,10 @@ import numpy as np
 from offdevice.data.capture import DEFAULT_CAPTURES_DIR
 from offdevice.features import params
 from offdevice.features.extract import extract_features
-from offdevice.model.dataset import flatten_features
+from offdevice.model.dataset import DEFAULT_QUARANTINE, flatten_features, read_quarantine
 from offdevice.model.fit import MahalanobisModel, distances, load_model
 from offdevice.model.split import read_holdout
-from offdevice.nv.parse import slice_nv
+from offdevice.nv.parse import DUMP_SIZE, slice_nv
 
 
 def score_bytes(model: MahalanobisModel, data: bytes) -> float:
@@ -48,8 +51,35 @@ def main() -> int:
     if bool(args.paths) == (args.holdout is not None):
         print("give capture paths OR --holdout, not both/neither")
         return 2
-    paths = (sorted(args.captures_dir / name for name in read_holdout(args.holdout))
-             if args.holdout else args.paths)
+
+    model = load_model(args.artifact)
+    if model.threshold is None:
+        print("[score] artifact has NO threshold yet -- distances only, no verdicts")
+
+    if args.holdout is not None:
+        # The exam is only honest against the exact list the fit excluded: a
+        # --no-holdout artifact trained on these files, and a different list
+        # grades captures the model may have seen.
+        recorded = model.meta.get("holdout_file")
+        if recorded is None:
+            print("[score] artifact was fitted with --no-holdout (plumbing) -- these "
+                  "files may be its training data; re-fit with the holdout excluded")
+            return 1
+        if Path(str(recorded)).resolve() != args.holdout.resolve():
+            print(f"[score] --holdout {args.holdout} is not the list the artifact "
+                  f"excluded ({recorded}) -- grading a different exam invalidates "
+                  f"the false-positive check")
+            return 1
+        names = read_holdout(args.holdout)
+        quarantined = sorted(names & read_quarantine())
+        if quarantined:
+            print(f"[score] {len(quarantined)} holdout name(s) are quarantined "
+                  f"({DEFAULT_QUARANTINE.name}) -- a retracted capture can't grade "
+                  f"the exam; re-run split: {quarantined[:4]}")
+            return 1
+        paths = sorted(args.captures_dir / name for name in names)
+    else:
+        paths = args.paths
     if not paths:
         print(f"[score] nothing to score -- {args.holdout} names no files")
         return 1
@@ -59,13 +89,14 @@ def main() -> int:
               f"{args.captures_dir}?): {[p.name for p in missing[:4]]}")
         return 1
 
-    model = load_model(args.artifact)
-    if model.threshold is None:
-        print("[score] artifact has NO threshold yet -- distances only, no verdicts")
-
     flagged = 0
     for path in paths:
-        d = score_bytes(model, path.read_bytes())
+        raw = path.read_bytes()
+        if len(raw) not in (params.WINDOW_BYTES, DUMP_SIZE):
+            print(f"[score] {path.name}: {len(raw)} bytes -- expected a {DUMP_SIZE}-byte "
+                  f"capture or a {params.WINDOW_BYTES}-byte NV slice (truncated file?)")
+            return 1
+        d = score_bytes(model, raw)
         if model.threshold is None:
             print(f"{path.name:60s} d={d:9.3f}")
         else:

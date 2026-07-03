@@ -45,9 +45,23 @@ regeneration is deliberate and gets a line here.
   cycle hardware-resets the board via ST-LINK and captures during the firmware's
   boot window (`DUMP_NSFLASH=2`), so every snapshot is a frozen, consistent ring
   and every capture leaves a benign reboot seam (timestamp restart) in the data.
-- **Fill-state coverage:** runs started with `--fresh` (erased ring) walk
-  near-empty → pre-wrap → just-wrapped → steady state over the first ~3.5 h;
-  steady-state samples accumulate thereafter.
+- **Fill-state coverage:** a `--fresh` run's capture 1 happens at boot, before
+  any record lands, so it is always the **empty** state. **near-empty** means
+  ≤62 records ≈ the first ~46 min at 45 s/record — so it only appears if an
+  early capture is scheduled inside that window; at the steady 2 h interval it
+  is never seen. A fresh campaign therefore starts with a short-interval fill
+  pass (`--interval 0.5`, first capture at ~40 records) and walks
+  empty → near-empty → pre-wrap → just-wrapped over ~3.5 h; steady-state
+  samples accumulate on the long interval thereafter.
+- **An erased ring is benign BY DESIGN (deliberate decision, not an accident of
+  the schedule):** `--fresh` campaigns put all-0xFF "empty" captures in training,
+  so the model learns an erased NV region as normal — and the parser treats
+  blank pages as legal. This is consistent with the threat model: the IDS hunts
+  a *foreign payload hidden in NV* (persistence), and an erased region hides
+  nothing (a region erase is an availability nuisance the firmware/logger
+  recovers from). Consequence for eval: **whole-region erase is a DESIGNED MISS**
+  — the synthetic-anomaly taxonomy must list it as such so the detection curve
+  stays honest.
 - **Variant tags:** `nv45s-<run-id>` for campaign data; `nv45s-smoke` (and any
   other non-campaign tag) is plumbing verification, excluded from training.
 - **Holdout policy:** ~20% of captures, chosen stratified across fill states
@@ -55,7 +69,19 @@ regeneration is deliberate and gets a line here.
   touch the fit or the threshold. Mechanism: `python -m offdevice.model.split
   <tags>` derives each capture's fill state from its parsed ring and writes the
   chosen filenames to `offdevice/data/holdout.txt`, which is **committed** — the
-  audit trail that the exam set was locked away before any fitting. `fit.py`
-  refuses to run without it (or an explicit `--no-holdout` for plumbing checks);
-  the held-out captures are scored exactly once, after the threshold is chosen,
-  via `offdevice.model.score`.
+  audit trail that the exam set was locked away before any fitting. The file
+  also records the variants the split saw (`# variants:` header); `fit.py`
+  refuses variants beyond that set (they would train with zero exam coverage).
+  `fit.py` refuses to run without the file (or an explicit `--no-holdout` for
+  plumbing checks); the held-out captures are scored exactly once, after the
+  threshold is chosen, via `offdevice.model.score`.
+- **Quarantine policy (retracting a bad capture):** the manifest is append-only
+  and is never edited. If a capture turns out to be structurally bad (e.g. a
+  foreign page — the benign gate in `offdevice/model/dataset.py` aborts on it),
+  the designed exit is `offdevice/data/quarantine.txt`: one bare filename per
+  line, reason after `#`, same format as holdout.txt. Every model path
+  (dataset assembly, split, fit, holdout scoring) skips quarantined names; a
+  name must never sit in both quarantine and holdout (fit/score refuse). The
+  file does not exist until the first retraction; create it next to holdout.txt
+  when needed — and commit it then, for the same auditability reason as
+  holdout.txt (it changes what the model trained on).

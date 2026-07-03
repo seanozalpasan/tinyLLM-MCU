@@ -39,7 +39,9 @@ def read_manifest(manifest_path: str | Path) -> list[DumpRecord]:
             try:
                 obj = json.loads(stripped)
                 records.append(DumpRecord.from_json_obj(obj))
-            except (json.JSONDecodeError, ValueError) as exc:
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                # TypeError: a wrong-TYPED field (e.g. "conditions": 5) raises it
+                # from dict()/int() inside from_json_obj -- same file:line context.
                 raise ValueError(f"{path}:{lineno}: bad manifest record: {exc}") from exc
     return records
 

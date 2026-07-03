@@ -30,9 +30,10 @@ EXPECTED_REFS_DUMPS = 7
 
 
 def find_refs_dumps() -> list[Path]:
-    """Every .bin under refs/ (recursive, sorted). Recursive because the dumps sit
-    at three different depths -- a recursive glob can't miss one the way a
-    hand-listed path can."""
+    """Every .bin under REFS_DIR (the MARS Classification-Server-Scripts tree),
+    recursive + sorted. Recursive because the dumps sit at three different
+    depths there -- a recursive glob can't miss one the way a hand-listed
+    path can."""
     return sorted(REFS_DIR.glob("**/*.bin"))
 
 

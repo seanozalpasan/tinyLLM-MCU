@@ -45,13 +45,15 @@ from offdevice.data.manifest import read_manifest
 from offdevice.features import params
 from offdevice.model.dataset import (
     DEFAULT_MANIFEST,
+    DEFAULT_QUARANTINE,
     FILL_STATES,
     N_DIMS,
     Sample,
     design_matrix,
     load_samples,
+    read_quarantine,
 )
-from offdevice.model.split import DEFAULT_HOLDOUT, read_holdout
+from offdevice.model.split import DEFAULT_HOLDOUT, read_holdout, read_holdout_variants
 from offdevice.nv import spec
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -226,17 +228,50 @@ def main() -> int:
                   f"stale or from a different campaign (e.g. a smoke split). Re-run "
                   f"split against THIS data first: {stale[:4]}")
             return 1
+        # The reverse direction: the stale check above only proves holdout <= scope.
+        # A fit scope GROWN beyond what the split saw (split on A, fit on A+B) would
+        # train every B capture with zero exam coverage -- refuse that too.
+        split_variants = read_holdout_variants(args.holdout)
+        if split_variants is None:
+            print(f"[fit] {args.holdout} has no '# variants:' header line -- it predates "
+                  f"the scope check; re-run offdevice.model.split to regenerate it.")
+            return 1
+        unseen = sorted(set(args.variants) - split_variants)
+        if unseen:
+            print(f"[fit] variant(s) {unseen} were never seen by the split that wrote "
+                  f"{args.holdout} -- all their captures would train with zero exam "
+                  f"coverage. Re-run split over the full variant scope first.")
+            return 1
 
-    samples = load_samples(args.manifest, tuple(args.variants), exclude=exclude)
+    quarantine = read_quarantine()
+    if quarantine:
+        print(f"[fit] {len(quarantine)} quarantined name(s) excluded "
+              f"({DEFAULT_QUARANTINE.name})")
+        overlap = sorted(exclude & quarantine)
+        if overlap:
+            print(f"[fit] {len(overlap)} name(s) sit in BOTH the holdout and quarantine "
+                  f"lists -- a retracted capture can't serve as exam data. Re-run split "
+                  f"so the holdout replaces {overlap[:4]}")
+            return 1
+
+    samples = load_samples(args.manifest, tuple(args.variants), exclude=exclude,
+                           quarantine=quarantine)
     if len(samples) < 4:
         print(f"[fit] {len(samples)} training capture(s) match variants {args.variants} "
               f"-- leave-one-out needs at least 4")
         return 1
-    bad_range = [s.record.file for s in samples if not s.range_ok]
+    bad_range = [s for s in samples if not s.range_ok]
     if bad_range and not args.allow_out_of_range:
-        print(f"[fit] {len(bad_range)} capture(s) hold out-of-range values (generator "
-              f"bug era?) -- inspect them (offdevice.model.dataset) or pass "
-              f"--allow-out-of-range: {bad_range[:3]}{'...' if len(bad_range) > 3 else ''}")
+        torn = [s.record.file for s in bad_range if s.n_torn]
+        plain = [s.record.file for s in bad_range if not s.n_torn]
+        if torn:
+            print(f"[fit] {len(torn)} capture(s) hold probable TORN records (a reset "
+                  f"landed inside a record program; hum+press read erased): {torn[:3]}"
+                  f"{'...' if len(torn) > 3 else ''}")
+        if plain:
+            print(f"[fit] {len(plain)} capture(s) hold out-of-range values (generator "
+                  f"bug?): {plain[:3]}{'...' if len(plain) > 3 else ''}")
+        print("[fit] inspect them (offdevice.model.dataset) or pass --allow-out-of-range")
         return 1
 
     x_train = design_matrix(samples)
@@ -251,20 +286,26 @@ def main() -> int:
               f"too-similar captures")
 
     loo = loo_distances(x_train)
-    q = {p: float(np.quantile(loo, p)) for p in (0.50, 0.90, 0.95)}
+    # method="higher" everywhere in this report: with it, p95 IS the 5% threshold,
+    # so the percentile line and the candidate table can't print two different
+    # numbers for the same quantile of the same 20 distances.
+    q = {p: float(np.quantile(loo, p, method="higher")) for p in (0.50, 0.90, 0.95)}
     print(f"[fit] leave-one-out distances: n={n} min={loo.min():.3f} "
           f"p50={q[0.50]:.3f} p90={q[0.90]:.3f} p95={q[0.95]:.3f} max={loo.max():.3f}")
     for fp in CANDIDATE_FP_TARGETS:
-        marker = " (below 1/n resolution -- effectively the max)" if fp < 1.0 / n else ""
+        # At fp == 1/n exactly, method="higher" already lands on the max -- the
+        # marker must include that boundary, not just fp < 1/n.
+        marker = " (at/below 1/n resolution -- effectively the max)" if fp <= 1.0 / n else ""
         print(f"[fit]   fp-target {fp:>5.0%} -> threshold {threshold_from_loo(loo, fp):.3f}"
               f"{marker}")
 
     threshold = None
     if args.fp_target is not None:
         threshold = threshold_from_loo(loo, args.fp_target)
-        if args.fp_target < 1.0 / n:
-            print(f"[fit] NOTE: fp-target {args.fp_target:.0%} is finer than 1/{n} -- "
-                  f"the threshold is just the max observed distance; more data sharpens it")
+        if args.fp_target <= 1.0 / n:
+            print(f"[fit] NOTE: fp-target {args.fp_target:.0%} is at or beyond the 1/{n} "
+                  f"resolution -- the threshold is just the max observed distance; more "
+                  f"data sharpens it")
         print(f"[fit] threshold = {threshold:.3f} (fp-target {args.fp_target:.0%})")
 
     mean, precision, shrinkage = fit_mean_precision(x_train)
@@ -278,7 +319,11 @@ def main() -> int:
         "holdout_file": holdout_name,
         "fp_target": args.fp_target,
         "shrinkage": shrinkage,
-        "loo_distances": [round(float(d), 6) for d in sorted(loo)],
+        # (filename, distance) pairs, ordered by distance: loo rows follow the
+        # samples/design-matrix order, so zip BEFORE sorting -- keeping the names
+        # is what lets "which capture is the outlier?" be answered later.
+        "loo_distances": [[name, d] for d, name in sorted(
+            (round(float(d), 6), s.record.file) for s, d in zip(samples, loo))],
         "score": "d(x) = sqrt((x-mean)^T precision (x-mean)); anomaly if d > threshold",
         "standardization": "fit ran on per-dim z-scores; folded back: P = D^-1 P_z D^-1",
         "vector_order": f"feature-major {list(params.FEATURE_ORDER)}, {N_DIMS} dims",

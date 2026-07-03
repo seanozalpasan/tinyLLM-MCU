@@ -9,7 +9,9 @@ Run from the repo root (so `import offdevice...` resolves):
 
 from __future__ import annotations
 
+import hashlib
 import struct
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -18,6 +20,7 @@ import pytest
 from offdevice.data.format import DumpRecord
 from offdevice.data.manifest import write_manifest
 from offdevice.features.extract import extract_features
+from offdevice.model import score
 from offdevice.model.dataset import (
     N_DIMS,
     Sample,
@@ -35,7 +38,12 @@ from offdevice.model.fit import (
     save_model,
     threshold_from_loo,
 )
-from offdevice.model.split import choose_holdout, read_holdout, write_holdout
+from offdevice.model.split import (
+    choose_holdout,
+    read_holdout,
+    read_holdout_variants,
+    write_holdout,
+)
 from offdevice.nv import spec
 from offdevice.nv.parse import DUMP_SIZE, parse_region
 from offdevice.tests.fixtures import synthetic_nv_region
@@ -108,45 +116,174 @@ def test_benign_structure_rejects_foreign_page() -> None:
         check_benign_structure(view, "x.bin")
 
 
+def test_benign_structure_rejects_dirty_tail() -> None:
+    blank = bytes([spec.ERASED_BYTE]) * spec.PAGE_SIZE
+    page = bytearray(make_page(make_header(), 1))
+    off = spec.HEADER_SIZE + 3 * spec.RECORD_SIZE   # plant a record past the blank head
+    page[off : off + spec.RECORD_SIZE] = make_record(9)
+    with pytest.raises(ValueError, match="dirty tail"):
+        check_benign_structure(parse_region(region(bytes(page), blank)), "x.bin")
+
+
+def test_benign_structure_rejects_dirty_header_pad() -> None:
+    # The firmware programs the header's 12 reserve bytes as 0x00; anything else
+    # means the header was rewritten or planted.
+    blank = bytes([spec.ERASED_BYTE]) * spec.PAGE_SIZE
+    header = bytearray(make_header())
+    header[-1] = 0xAB                               # last pad byte
+    with pytest.raises(ValueError, match="pad"):
+        check_benign_structure(parse_region(region(make_page(bytes(header), 3), blank)),
+                               "x.bin")
+
+
+# The cross-page ring invariants: a page opens only when its predecessor is FULL,
+# stamping seq+1 and op_count += RECORDS_PER_PAGE. Any other pair of valid headers
+# is a state the logger cannot write -- the gate must refuse it.
+
+def test_benign_structure_rejects_equal_page_seqs() -> None:
+    view = parse_region(region(make_page(make_header(page_seq=2), spec.RECORDS_PER_PAGE),
+                               make_page(make_header(page_seq=2), 5)))
+    with pytest.raises(ValueError, match="corrupt ring"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_nonconsecutive_seqs() -> None:
+    view = parse_region(region(
+        make_page(make_header(page_seq=1, op_count=0), spec.RECORDS_PER_PAGE),
+        make_page(make_header(page_seq=3, op_count=spec.RECORDS_PER_PAGE), 5)))
+    with pytest.raises(ValueError, match="consecutive"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_older_page_not_full() -> None:
+    view = parse_region(region(
+        make_page(make_header(page_seq=1, op_count=0), 50),
+        make_page(make_header(page_seq=2, op_count=spec.RECORDS_PER_PAGE), 5)))
+    with pytest.raises(ValueError, match="predecessor is full"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_broken_op_count_chain() -> None:
+    view = parse_region(region(
+        make_page(make_header(page_seq=1, op_count=0), spec.RECORDS_PER_PAGE),
+        make_page(make_header(page_seq=2, op_count=100), 5)))
+    with pytest.raises(ValueError, match="op_count chain"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_accepts_the_golden_fixture() -> None:
+    # The spec-conformant fixture must clear every gate, or the gates are wrong.
+    check_benign_structure(parse_region(synthetic_nv_region()), "fixture")
+
+
 # ---- dataset: manifest-driven assembly ---------------------------------------------
 
-def _write_capture(dir_: Path, name: str, nv: bytes) -> None:
+def _write_capture(dir_: Path, name: str, nv: bytes) -> str:
+    """Write a synthetic 256 KB dump embedding nv; return its REAL md5 hexdigest --
+    the read path re-verifies manifest fingerprints, so records for on-disk files
+    must carry the true digest."""
     dump = bytearray(DUMP_SIZE)          # zeros stand in for the static image
     dump[spec.DUMP_OFFSET:] = nv
     (dir_ / name).write_bytes(bytes(dump))
+    return hashlib.md5(bytes(dump)).hexdigest()
 
 
-def _rec(name: str, variant: str, label: str = "benign") -> DumpRecord:
+def _rec(name: str, variant: str, label: str = "benign",
+         md5: str = "a" * 32) -> DumpRecord:
+    # The "a"*32 default is only for in-memory Samples that never touch a file;
+    # any record load_samples will READ needs _write_capture's real digest.
     return DumpRecord(file=name, label=label, testbed="tbA", capture_point="boot-window",
-                      mem_range="0x08040000-0x0807FFFF", md5="a" * 32,
+                      mem_range="0x08040000-0x0807FFFF", md5=md5,
                       ts="2026-07-03T12:00:00", n_bytes=DUMP_SIZE,
                       conditions={"variant": variant})
 
 
 def test_load_samples_filters_and_excludes(tmp_path: Path) -> None:
-    _write_capture(tmp_path, "a.bin", synthetic_nv_region())
-    _write_capture(tmp_path, "b.bin", synthetic_nv_region())
-    _write_capture(tmp_path, "c.bin", synthetic_nv_region())
+    md5s = {name: _write_capture(tmp_path, name, synthetic_nv_region())
+            for name in ("a.bin", "b.bin", "c.bin")}
     manifest = tmp_path / "manifest.jsonl"
-    write_manifest(manifest, [_rec("a.bin", "campaign"), _rec("b.bin", "campaign"),
-                              _rec("c.bin", "smoke")])
+    write_manifest(manifest, [_rec("a.bin", "campaign", md5=md5s["a.bin"]),
+                              _rec("b.bin", "campaign", md5=md5s["b.bin"]),
+                              _rec("c.bin", "smoke", md5=md5s["c.bin"])])
 
-    samples = load_samples(manifest, ("campaign",))
+    samples = load_samples(manifest, ("campaign",), quarantine=frozenset())
     assert [s.record.file for s in samples] == ["a.bin", "b.bin"]
     assert all(s.fill_state == "just-wrapped" for s in samples)   # fixture: seq 3/4
     assert all(s.range_ok and s.x.shape == (N_DIMS,) for s in samples)
+    assert all(s.n_torn == 0 for s in samples)
 
-    held = load_samples(manifest, ("campaign",), exclude=frozenset({"a.bin"}))
+    held = load_samples(manifest, ("campaign",), exclude=frozenset({"a.bin"}),
+                        quarantine=frozenset())
     assert [s.record.file for s in held] == ["b.bin"]
+
+
+def test_load_samples_skips_unrelated_missing_file(tmp_path: Path) -> None:
+    # Records are filtered BEFORE bytes load: a deleted smoke capture (or any file
+    # outside the requested variants) must not break assembly of the campaign.
+    md5 = _write_capture(tmp_path, "a.bin", synthetic_nv_region())
+    manifest = tmp_path / "manifest.jsonl"
+    write_manifest(manifest, [_rec("a.bin", "campaign", md5=md5),
+                              _rec("gone.bin", "smoke")])   # never written to disk
+    samples = load_samples(manifest, ("campaign",), quarantine=frozenset())
+    assert [s.record.file for s in samples] == ["a.bin"]
+
+
+def test_load_samples_rejects_md5_mismatch(tmp_path: Path) -> None:
+    # A capture corrupted/overwritten after capture time must fail loudly, not train.
+    _write_capture(tmp_path, "a.bin", synthetic_nv_region())
+    manifest = tmp_path / "manifest.jsonl"
+    write_manifest(manifest, [_rec("a.bin", "campaign", md5="b" * 32)])  # wrong digest
+    with pytest.raises(ValueError, match="md5"):
+        load_samples(manifest, ("campaign",), quarantine=frozenset())
+
+
+def test_load_samples_aborts_on_foreign_page_via_manifest(tmp_path: Path) -> None:
+    foreign = struct.pack("<Q", 1) + b"\xff" * (spec.PAGE_SIZE - 8)
+    nv = region(make_page(make_header(), 3), foreign)
+    md5 = _write_capture(tmp_path, "bad.bin", nv)
+    manifest = tmp_path / "manifest.jsonl"
+    write_manifest(manifest, [_rec("bad.bin", "campaign", md5=md5)])
+    with pytest.raises(ValueError, match="FOREIGN"):
+        load_samples(manifest, ("campaign",), quarantine=frozenset())
+
+
+def test_load_samples_honors_quarantine(tmp_path: Path) -> None:
+    # The designed recovery from a structurally-bad capture: quarantining its name
+    # unblocks every future assembly run without touching the append-only manifest.
+    foreign = struct.pack("<Q", 1) + b"\xff" * (spec.PAGE_SIZE - 8)
+    bad_md5 = _write_capture(tmp_path, "bad.bin", region(make_page(make_header(), 3), foreign))
+    good_md5 = _write_capture(tmp_path, "good.bin", synthetic_nv_region())
+    manifest = tmp_path / "manifest.jsonl"
+    write_manifest(manifest, [_rec("bad.bin", "campaign", md5=bad_md5),
+                              _rec("good.bin", "campaign", md5=good_md5)])
+    samples = load_samples(manifest, ("campaign",), quarantine=frozenset({"bad.bin"}))
+    assert [s.record.file for s in samples] == ["good.bin"]
 
 
 def test_load_samples_flags_out_of_range(tmp_path: Path) -> None:
     nv = region(make_page(make_header(page_seq=1), 3, press=0), bytes([0xFF]) * spec.PAGE_SIZE)
-    _write_capture(tmp_path, "bad.bin", nv)
+    md5 = _write_capture(tmp_path, "bad.bin", nv)
     manifest = tmp_path / "manifest.jsonl"
-    write_manifest(manifest, [_rec("bad.bin", "campaign")])
-    (sample,) = load_samples(manifest, ("campaign",))
+    write_manifest(manifest, [_rec("bad.bin", "campaign", md5=md5)])
+    (sample,) = load_samples(manifest, ("campaign",), quarantine=frozenset())
     assert sample.range_ok is False       # press=0 < legal 30000: marked, not rejected
+    assert sample.n_torn == 0             # a real range bug, not a torn write
+
+
+def test_load_samples_counts_torn_records(tmp_path: Path) -> None:
+    # A reset inside the record program leaves the second doubleword erased:
+    # hum+press read 0xFFFFFFFF. Marked as torn (and out of range), never repaired.
+    erased = 0xFFFFFFFF
+    body = (make_record(0) + make_record(45, hum=erased, press=erased) + make_record(90))
+    page = (make_header(page_seq=1) + body
+            + spec.BLANK_RECORD * (spec.RECORDS_PER_PAGE - 3))
+    nv = region(page, bytes([0xFF]) * spec.PAGE_SIZE)
+    md5 = _write_capture(tmp_path, "torn.bin", nv)
+    manifest = tmp_path / "manifest.jsonl"
+    write_manifest(manifest, [_rec("torn.bin", "campaign", md5=md5)])
+    (sample,) = load_samples(manifest, ("campaign",), quarantine=frozenset())
+    assert sample.n_torn == 1
+    assert sample.range_ok is False
 
 
 # ---- split -------------------------------------------------------------------------
@@ -158,7 +295,7 @@ def _fake_samples(states: dict[str, int]) -> list[Sample]:
         for _ in range(n):
             out.append(Sample(record=_rec(f"cap{i:03d}.bin", "campaign"),
                               x=np.zeros(N_DIMS, dtype=np.float32),
-                              fill_state=state, n_records=0, range_ok=True))
+                              fill_state=state, n_records=0, n_torn=0, range_ok=True))
             i += 1
     return out
 
@@ -185,8 +322,18 @@ def test_holdout_file_round_trip(tmp_path: Path) -> None:
     samples = _fake_samples({"steady": 4})
     chosen, notes = choose_holdout(samples, fraction=0.5, seed=3)
     path = tmp_path / "holdout.txt"
-    write_holdout(path, chosen, ("campaign",), 0.5, 3, len(samples), notes)
+    write_holdout(path, chosen, ("campaign", "extra"), 0.5, 3, len(samples), notes)
     assert read_holdout(path) == {s.record.file for s in chosen}
+    # The variants header is machine-read back: fit.py refuses to train on variants
+    # the split never saw (they would carry zero exam coverage).
+    assert read_holdout_variants(path) == frozenset({"campaign", "extra"})
+
+
+def test_holdout_without_variants_header_reads_none(tmp_path: Path) -> None:
+    path = tmp_path / "holdout.txt"
+    path.write_text("# a pre-scope-check list\nx.bin\n", encoding="utf-8")
+    assert read_holdout(path) == frozenset({"x.bin"})
+    assert read_holdout_variants(path) is None
 
 
 # ---- fit / score / threshold / artifact --------------------------------------------
@@ -265,3 +412,47 @@ def test_artifact_round_trip(tmp_path: Path) -> None:
     no_thr = MahalanobisModel(model.mean, model.precision, None, {"n_train": 9})
     save_model(no_thr, tmp_path / "n")
     assert load_model(tmp_path / "n").threshold is None
+
+
+# ---- score: dispatch + verdict path --------------------------------------------------
+
+def _dump_with(nv: bytes) -> bytes:
+    dump = bytearray(DUMP_SIZE)
+    dump[spec.DUMP_OFFSET:] = nv
+    return bytes(dump)
+
+
+def test_score_bytes_accepts_slice_and_full_dump() -> None:
+    # A bare 4 KB NV slice and the 256 KB dump embedding it must score identically.
+    nv = synthetic_nv_region()
+    rng = np.random.default_rng(5)
+    model = MahalanobisModel(mean=rng.normal(size=N_DIMS),
+                             precision=np.eye(N_DIMS), threshold=None, meta={})
+    assert score.score_bytes(model, nv) == score.score_bytes(model, _dump_with(nv))
+
+
+def test_score_main_verdict_and_size_guard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    dump = _dump_with(synthetic_nv_region())
+    bin_path = tmp_path / "cap.bin"
+    bin_path.write_bytes(dump)
+    rng = np.random.default_rng(6)
+    model = MahalanobisModel(mean=rng.normal(size=N_DIMS),
+                             precision=np.eye(N_DIMS), threshold=None, meta={})
+    d = score.score_bytes(model, dump)
+    assert d > 0.0
+    # Threshold below the capture's distance: the verdict line must say ANOMALY.
+    npz_path, _ = save_model(
+        MahalanobisModel(model.mean, model.precision, d / 2, {}), tmp_path / "m")
+    monkeypatch.setattr(sys, "argv", ["score", str(npz_path), str(bin_path)])
+    assert score.main() == 0
+    out = capsys.readouterr().out
+    assert "ANOMALY" in out and "1 of 1 flagged" in out
+
+    # A wrong-size file is refused with a message, not a raw traceback.
+    short = tmp_path / "short.bin"
+    short.write_bytes(b"\x00" * 100)
+    monkeypatch.setattr(sys, "argv", ["score", str(npz_path), str(short)])
+    assert score.main() == 1
+    assert "expected" in capsys.readouterr().out
