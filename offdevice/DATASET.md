@@ -52,4 +52,10 @@ regeneration is deliberate and gets a line here.
   other non-campaign tag) is plumbing verification, excluded from training.
 - **Holdout policy:** ~20% of captures, chosen stratified across fill states
   BEFORE any model fitting, held out for false-positive sanity checks; they never
-  touch the fit or the threshold.
+  touch the fit or the threshold. Mechanism: `python -m offdevice.model.split
+  <tags>` derives each capture's fill state from its parsed ring and writes the
+  chosen filenames to `offdevice/data/holdout.txt`, which is **committed** — the
+  audit trail that the exam set was locked away before any fitting. `fit.py`
+  refuses to run without it (or an explicit `--no-holdout` for plumbing checks);
+  the held-out captures are scored exactly once, after the threshold is chosen,
+  via `offdevice.model.score`.
