@@ -39,6 +39,7 @@ typedef enum
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
+uint32_t SECURE_Integrity_Tick(void);
 void SECURE_RegisterCallback(SECURE_CallbackIDTypeDef CallbackId, void *func);
 
 void SECURE_print_Log(char* string);

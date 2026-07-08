@@ -172,3 +172,29 @@ void StaticHash_BootCheck(void)
     print_digest("[HASH]   golden  =", (const uint8_t *)STATIC_HASH_GOLDEN_ADDR);
   }
 }
+
+/* ===== runtime re-check (NS-callable periodic tick) ===== */
+
+int StaticHash_Verify(void)
+{
+  /* Retain 8-byte alignment: matches compute_sha256's DMA-safety expectation. */
+  uint8_t now[STATIC_HASH_DIGEST_LEN] __attribute__((aligned(8)));
+
+  if (compute_sha256(now) != 0)
+  {
+    printf("[HASH] ERROR: SHA-256 compute failed\r\n");
+    return 0;
+  }
+
+  if (memcmp(now, (const uint8_t *)STATIC_HASH_GOLDEN_ADDR,
+             STATIC_HASH_DIGEST_LEN) == 0)
+  {
+    print_digest("[HASH] static region OK: sha256=", now);
+    return 1;
+  }
+
+  printf("[HASH] *** MISMATCH *** -- NS static region changed without enrollment => ANOMALY\r\n");
+  print_digest("[HASH]   computed=", now);
+  print_digest("[HASH]   golden  =", (const uint8_t *)STATIC_HASH_GOLDEN_ADDR);
+  return 0;
+}

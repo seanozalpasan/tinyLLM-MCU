@@ -72,6 +72,7 @@ extern DMA_HandleTypeDef hdma_memtomem_dma1_channel2;
 extern DMA_HandleTypeDef hdma_memtomem_dma1_channel3;
 #define BUFFER_SIZE 256U
 extern uint32_t SEC_Mem_Buffer[BUFFER_SIZE];
+extern IWDG_HandleTypeDef hiwdg;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -102,6 +103,9 @@ void NonSecureToNonSecureTransferError(DMA_HandleTypeDef *hdma_memtomem_dma1_cha
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
+
+
+
 
 #ifdef __cplusplus
 }

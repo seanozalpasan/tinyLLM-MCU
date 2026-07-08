@@ -267,6 +267,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /*  Periodic integrity tick: secure world re-hashes the immutable region and
+        feeds the watchdog only on a pass. 10 s period vs ~30 s IWDG timeout ->
+        three missed ticks (hung/compromised loop) = reset. */
+    static uint32_t last_integ_ms = 0;
+    // if (HAL_GetTick() - last_integ_ms >= 10000u)   /* Left this just in case if 10s is needed */
+    if (HAL_GetTick() - last_integ_ms >= 45000u)
+    {
+      last_integ_ms = HAL_GetTick();
+      (void)SECURE_Integrity_Tick();
+    }
     {
 #if NV_LOGGER
       NvReading r;

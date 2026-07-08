@@ -24,6 +24,7 @@
 #include <string.h>
 #include "flash_dump.h"
 #include "static_hash.h"   /* Part-1 IDS: static NS-region SHA-256 vs golden */
+#include "stm32l5xx_hal_iwdg.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -119,7 +120,7 @@ static const uint32_t OSPI_Test_Pattern[4] =
   0xDEADBEEFUL, 0xCAFEBABEUL, 0x12345678UL, 0xA5A5A5A5UL
 };
 #endif
-
+IWDG_HandleTypeDef hiwdg; /* fed only inside SECURE_Integrity_Tick (secure_nsc.c)*/
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -220,6 +221,20 @@ int main(void)
 #endif
 
     HAL_SuspendTick();
+
+
+    /* Last thing before the NS jump: HAL_IWDG_Init both configures AND starts
+      the dog, and once started it can NEVER be stopped -- so the NS loop that
+       feeds it (SECURE_Integrity_Tick, every 45 s) must already be flashed. */
+    __HAL_DBGMCU_FREEZE_IWDG(); /* debug-only: pause dog at breakpoints. REMOVE for demo. */
+    hiwdg.Instance = IWDG;
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_256; /* LSI ~32 kHz / 256 = 125 Hz */
+    hiwdg.Init.Reload = 3750;                  /* 3750 / 125 Hz = 30 s timeout */
+    hiwdg.Init.Window = IWDG_WINDOW_DISABLE;
+    if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+    {
+      Error_Handler();
+    }
   /* USER CODE END 2 */
 
   /*************** Setup and jump to non-secure *******************************/
@@ -234,6 +249,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
   }
   /* USER CODE END 3 */
 }

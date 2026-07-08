@@ -29,4 +29,8 @@
    compute + compare and print the verdict. Call once, after USART1 is up. */
 void StaticHash_BootCheck(void);
 
+/* This is a re-check function: compute the hash of the static region and compare it with the golden digest.
+   Returns: 1 = match, 0 = mismatch */
+int StaticHash_Verify(void);
+
 #endif /* STATIC_HASH_H */

@@ -22,7 +22,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "secure_nsc.h"
-#include <string.h>     /* for memcmp() */
+#include "static_hash.h" /* for StaticHash_Verify() */
+#include <string.h> /* for memcmp() */
 
 /* Global variables ----------------------------------------------------------*/
 void *pSecureFaultCallback = NULL;   /* Pointer to secure fault callback in Non-secure */
@@ -174,6 +175,23 @@ CMSE_NS_ENTRY void SECURE_RegisterCallback(SECURE_CallbackIDTypeDef CallbackId, 
         break;
     }
   }
+}
+
+/**
+ * @brief  NS-callable periodic integrity tick. Re-hashes the 252 KB immutable
+ *         region and feeds the IWDG only on a match; resets the device on
+ *         mismatch.
+ * @retval 1 = match, IWDG fed (0 is never actually observed -- mismatch resets first)
+ */
+CMSE_NS_ENTRY uint32_t SECURE_Integrity_Tick(void)
+{
+  if (StaticHash_Verify()) /* re-hash and compare vs golden digest in secure flash */
+  {
+    HAL_IWDG_Refresh(&hiwdg); /* feed only on a passing hash */
+    return 1u;
+  }
+  NVIC_SystemReset(); /* mismatch -- reset immediately, verdict wiring is Week-3 */
+  return 0u;          /* not reached */
 }
 
 /* Private functions ---------------------------------------------------------*/
