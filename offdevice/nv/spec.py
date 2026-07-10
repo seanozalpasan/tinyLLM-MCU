@@ -9,7 +9,7 @@ something here -> regenerate -> rebuild; never edit the generated headers.
 
 Layout, per 2 KB flash page (little-endian throughout; two pages = the region):
 
-    [header 64 B][124 x 16 B records]
+    [header 64 B][4 x 8 B settings-journal slots][122 x 16 B records]
 
 The header is programmed once each time a page is erased+reopened ("page-open");
 records then append into fixed 16 B slots. A slot is two 8-byte flash
@@ -17,12 +17,20 @@ doublewords -- the L5's program granularity, un-rewritable without a page erase,
 so nothing in flash is ever updated in place: counters and stats live in RAM and
 are snapshotted into the header at page-open, and the write head is FOUND (first
 all-0xFF slot of the newest page), never stored. Newest page = highest page_seq.
+
+The settings journal persists the runtime display-unit settings (B2 presses) as
+an append-only chain: page-open stamps J0 with the live settings, every later
+change programs the NEXT blank slot (one doubleword -- atomic against reset),
+and the live value is the END of the contiguous chain -- found at boot, never
+stored. Records stay canonical (degC / %RH / hPa, all x100) no matter what the
+settings say: unit-dependent storage would split the benign cloud into per-unit
+islands, and the empty space between islands would score as normal.
 """
 
 import struct
 from typing import NamedTuple
 
-SPEC_VERSION = 1   # bump on ANY layout or semantics change
+SPEC_VERSION = 2   # bump on ANY layout or semantics change
 
 # ---- region geometry (fixed by the locked TrustZone partition) -----------------
 
@@ -94,7 +102,36 @@ HEADER_FMT = _HEADER_FMT_NO_PAD + f"{HEADER_PAD}x"
 BLANK_HEADER = bytes([ERASED_BYTE]) * HEADER_SIZE   # a never-opened page starts so
 
 
-# ---- records (16 B each, appended after the header until the page is full) -------
+# ---- settings journal (4 x 8 B slots between header and records) -----------------
+# Append-only persistence for the runtime display-unit settings: page-open stamps
+# J0 from RAM, each runtime change programs the next blank slot, and the live
+# setting is the end of the contiguous chain (found at boot -- position in the
+# page is not time of writing, so the chain end is the only meaningful "newest").
+# One entry == one flash doubleword: a reset mid-write leaves it fully written or
+# still blank, never half a setting. reserved0 must be 0 -- a blank slot reads
+# 0xFFFF there, so blank can never be mistaken for an entry, and the reserved
+# bytes stay MONITORED blank space. op_count = lifetime records written when the
+# entry was stamped: it binds each change to a spot in the record stream, and it
+# is non-decreasing along the chain (equal is benign -- two presses can land
+# inside one 45 s record period).
+
+JOURNAL_OFFSET = HEADER_SIZE
+JOURNAL_SLOTS = 4
+JOURNAL_FIELDS = ("unit_temp", "unit_press", "reserved0", "op_count")
+JOURNAL_FMT = "<BBHI"
+JOURNAL_ENTRY_SIZE = struct.calcsize(JOURNAL_FMT)
+JOURNAL_SIZE = JOURNAL_SLOTS * JOURNAL_ENTRY_SIZE
+BLANK_JOURNAL_ENTRY = bytes([ERASED_BYTE]) * JOURNAL_ENTRY_SIZE
+
+# Display units -- what telemetry SAYS, never what records store. 0 is always the
+# canonical default (the encoding every record is stored in).
+UNIT_TEMP_C = 0
+UNIT_TEMP_F = 1
+UNIT_PRESS_HPA = 0
+UNIT_PRESS_INHG = 1
+
+
+# ---- records (16 B each, appended after the journal until the page is full) ------
 # ts = u32 SECONDS since boot: monotonic within a boot (boot_count separates
 # boots) and never wraps in practice; milliseconds would wrap in 49.7 days and
 # mimic the exact non-monotonic-timestamp anomaly the detector hunts.
@@ -102,7 +139,8 @@ BLANK_HEADER = bytes([ERASED_BYTE]) * HEADER_SIZE   # a never-opened page starts
 RECORD_FIELDS = ("ts",) + tuple(ch.name for ch in CHANNELS)
 RECORD_FMT = "<I" + "".join(ch.fmt for ch in CHANNELS)
 RECORD_SIZE = struct.calcsize(RECORD_FMT)
-RECORDS_PER_PAGE = (PAGE_SIZE - HEADER_SIZE) // RECORD_SIZE
+RECORDS_OFFSET = HEADER_SIZE + JOURNAL_SIZE   # first record slot: 0x060 into the page
+RECORDS_PER_PAGE = (PAGE_SIZE - RECORDS_OFFSET) // RECORD_SIZE
 RECORDS_TOTAL = NUM_PAGES * RECORDS_PER_PAGE
 BLANK_RECORD = bytes([ERASED_BYTE]) * RECORD_SIZE   # an unwritten slot reads as this
 
@@ -111,8 +149,8 @@ BLANK_RECORD = bytes([ERASED_BYTE]) * RECORD_SIZE   # an unwritten slot reads as
 # The rate is an operating knob, not layout: flash ages by ERASE COUNT (pages are
 # rated ~10k cycles minimum; each page erases once per RECORDS_TOTAL records). At
 # 1 s the ring wraps in ~4 min -- bring-up only, never training data. At 45 s each
-# page erases every ~3.1 h => ~3.5 years to the rated minimum, and a fully fresh
-# benign snapshot exists every ring turnover (~3.1 h) -- the balance between a
+# page erases every ~3 h => ~3.5 years to the rated minimum, and a fully fresh
+# benign snapshot exists every ring turnover (~3 h) -- the balance between a
 # credible device lifetime and dataset accumulation speed. The model trains at
 # the deploy rate only (train == infer distribution).
 

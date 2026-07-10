@@ -5,7 +5,8 @@ The chosen filenames go to a committed .txt so "the exam set was picked before
 studying" is a verifiable property of the repo, not a promise: fit.py excludes these
 files from training and from the threshold, and score.py grades them exactly once,
 after the threshold is chosen, as the honest false-positive check. The pick is
-stratified by ring fill state so every benign regime appears on the exam, and the
+stratified by ring fill state x settings state (pages carrying journal change
+entries are their own benign regime) so every regime appears on the exam, and the
 file records WHICH variants the split saw -- fit.py refuses to train on variants
 beyond that set, because their captures would carry zero exam coverage. An existing
 list is never overwritten without --force -- a re-split invalidates any model already
@@ -27,6 +28,7 @@ from offdevice.model.dataset import (
     DEFAULT_MANIFEST,
     DEFAULT_QUARANTINE,
     FILL_STATES,
+    SETTINGS_STATES,
     Sample,
     load_samples,
     read_name_list,
@@ -64,7 +66,8 @@ def read_holdout_variants(path: str | Path) -> frozenset[str] | None:
 def choose_holdout(
     samples: list[Sample], fraction: float, seed: int
 ) -> tuple[list[Sample], list[str]]:
-    """Stratified pick: per fill state, max(1, round(fraction*n)) capped at n-1.
+    """Stratified pick: per (fill state, settings state) stratum,
+    max(1, round(fraction*n)) capped at n-1.
 
     A single-capture stratum stays entirely in training -- holding out its only
     example would leave that benign state unlearned, a worse trade than losing its
@@ -73,24 +76,26 @@ def choose_holdout(
     if not (0.0 < fraction < 1.0):
         raise ValueError(f"fraction must be in (0, 1), got {fraction}")
     rng = np.random.default_rng(seed)
-    by_state: dict[str, list[Sample]] = {}
+    by_stratum: dict[str, list[Sample]] = {}
     for s in sorted(samples, key=lambda s: s.record.file):
-        by_state.setdefault(s.fill_state, []).append(s)
+        by_stratum.setdefault(f"{s.fill_state}/{s.settings_state}", []).append(s)
 
     chosen: list[Sample] = []
     notes: list[str] = []
-    for state in FILL_STATES:
-        group = by_state.get(state, [])
-        n = len(group)
-        if n == 0:
-            continue
-        if n == 1:
-            notes.append(f"{state}: only 1 capture -- kept in training")
-            continue
-        k = min(n - 1, max(1, round(fraction * n)))
-        idx = sorted(rng.choice(n, size=k, replace=False).tolist())
-        chosen.extend(group[i] for i in idx)
-        notes.append(f"{state}: held out {k} of {n}")
+    for fill in FILL_STATES:
+        for setting in SETTINGS_STATES:
+            stratum = f"{fill}/{setting}"
+            group = by_stratum.get(stratum, [])
+            n = len(group)
+            if n == 0:
+                continue
+            if n == 1:
+                notes.append(f"{stratum}: only 1 capture -- kept in training")
+                continue
+            k = min(n - 1, max(1, round(fraction * n)))
+            idx = sorted(rng.choice(n, size=k, replace=False).tolist())
+            chosen.extend(group[i] for i in idx)
+            notes.append(f"{stratum}: held out {k} of {n}")
     return chosen, notes
 
 
@@ -111,7 +116,7 @@ def write_holdout(
         f"fraction={fraction}",
         f"# {len(chosen)} of {n_total} captures held out -- " + "; ".join(notes),
     ]
-    lines += [f"{s.record.file}  # {s.fill_state}" for s in chosen]
+    lines += [f"{s.record.file}  # {s.fill_state}/{s.settings_state}" for s in chosen]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

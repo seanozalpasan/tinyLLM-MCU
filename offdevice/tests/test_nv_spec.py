@@ -28,32 +28,66 @@ def test_region_geometry() -> None:
 
 
 def test_page_layout_fills_exactly() -> None:
-    # 64 + 124*16 == 2048: every byte of a page is spec-defined (header, record,
-    # or blank slot) -- no unspecified tail for a payload to hide in.
-    assert spec.HEADER_SIZE + spec.RECORDS_PER_PAGE * spec.RECORD_SIZE == spec.PAGE_SIZE
-    assert spec.RECORDS_PER_PAGE == 124
-    assert spec.RECORDS_TOTAL == 248
+    # 64 + 32 + 122*16 == 2048: every byte of a page is spec-defined (header,
+    # journal slot, record, or blank slot) -- no unspecified tail for a payload
+    # to hide in.
+    assert (spec.HEADER_SIZE + spec.JOURNAL_SIZE
+            + spec.RECORDS_PER_PAGE * spec.RECORD_SIZE == spec.PAGE_SIZE)
+    assert spec.RECORDS_PER_PAGE == 122
+    assert spec.RECORDS_TOTAL == 244
+
+
+def test_journal_geometry() -> None:
+    # The journal sits between header and records at the design-record offsets;
+    # one entry == one flash doubleword is the atomicity guarantee (a reset
+    # mid-write leaves a slot fully written or still blank, never half-written).
+    assert spec.SPEC_VERSION == 2
+    assert spec.JOURNAL_OFFSET == 0x040
+    assert spec.JOURNAL_SLOTS == 4
+    assert spec.JOURNAL_ENTRY_SIZE == spec.DOUBLEWORD
+    assert spec.JOURNAL_SIZE == 32
+    assert spec.RECORDS_OFFSET == 0x060
+
+
+def test_display_units_pinned() -> None:
+    # 0 must stay the canonical default (the encoding records are stored in);
+    # the parser and the benign gate check unit fields against {0, 1}.
+    assert spec.UNIT_TEMP_C == 0 and spec.UNIT_TEMP_F == 1
+    assert spec.UNIT_PRESS_HPA == 0 and spec.UNIT_PRESS_INHG == 1
+
+
+def test_blank_journal_slot_never_parses_as_an_entry() -> None:
+    # A never-written slot reads all 0xFF: reserved0 then reads 0xFFFF, so the
+    # "reserved0 must be 0" rule makes blank unmistakable for a real entry.
+    fields = dict(zip(spec.JOURNAL_FIELDS,
+                      struct.unpack(spec.JOURNAL_FMT, spec.BLANK_JOURNAL_ENTRY)))
+    assert fields["reserved0"] != 0
 
 
 def test_strides_are_doubleword_multiples() -> None:
     # The L5 programs 8 B doublewords that can't be reprogrammed; a slot sharing
     # a doubleword with its neighbor would make the second write impossible.
     assert spec.HEADER_SIZE % spec.DOUBLEWORD == 0
+    assert spec.JOURNAL_ENTRY_SIZE % spec.DOUBLEWORD == 0
     assert spec.RECORD_SIZE % spec.DOUBLEWORD == 0
 
 
 def test_struct_formats_match_declared_sizes() -> None:
     assert struct.calcsize(spec.HEADER_FMT) == spec.HEADER_SIZE
+    assert struct.calcsize(spec.JOURNAL_FMT) == spec.JOURNAL_ENTRY_SIZE
     assert struct.calcsize(spec.RECORD_FMT) == spec.RECORD_SIZE
     assert spec.HEADER_PAD >= 0
     n_header = len(struct.unpack(spec.HEADER_FMT, bytes(spec.HEADER_SIZE)))
+    n_journal = len(struct.unpack(spec.JOURNAL_FMT, bytes(spec.JOURNAL_ENTRY_SIZE)))
     n_record = len(struct.unpack(spec.RECORD_FMT, bytes(spec.RECORD_SIZE)))
     assert n_header == len(spec.HEADER_FIELDS)
+    assert n_journal == len(spec.JOURNAL_FIELDS)
     assert n_record == len(spec.RECORD_FIELDS)
 
 
 def test_blank_sentinels() -> None:
     assert spec.BLANK_HEADER == b"\xff" * spec.HEADER_SIZE
+    assert spec.BLANK_JOURNAL_ENTRY == b"\xff" * spec.JOURNAL_ENTRY_SIZE
     assert spec.BLANK_RECORD == b"\xff" * spec.RECORD_SIZE
 
 
@@ -74,7 +108,7 @@ def test_channel_ranges_are_bme280() -> None:
 def test_rate_presets_pinned() -> None:
     # Deliberately pinned: changing a preset is a data-plan decision (benign
     # coverage + flash endurance), not a refactor. 45 s balances endurance
-    # (~3.5 yr to rated wear) against dataset yield (ring turnover ~3.1 h).
+    # (~3.5 yr to rated wear) against dataset yield (ring turnover ~3 h).
     assert spec.RATE_DEV_PERIOD_S == 1
     assert spec.RATE_DEPLOY_PERIOD_S == 45
 

@@ -20,6 +20,7 @@ import pytest
 from offdevice.data.format import DumpRecord
 from offdevice.data.manifest import write_manifest
 from offdevice.features.extract import extract_features
+from offdevice.model import dataset as dataset_mod
 from offdevice.model import score
 from offdevice.model.dataset import (
     N_DIMS,
@@ -28,6 +29,7 @@ from offdevice.model.dataset import (
     fill_state,
     flatten_features,
     load_samples,
+    settings_state,
 )
 from offdevice.model.fit import (
     MahalanobisModel,
@@ -62,9 +64,26 @@ def make_record(ts: int, temp: int = 2200, hum: int = 4500, press: int = 101300)
     return struct.pack(spec.RECORD_FMT, ts, temp, hum, press)
 
 
-def make_page(header: bytes | None, n_records: int, **rec_over: int) -> bytes:
+def make_journal_entry(**over: int) -> bytes:
+    fields = dict.fromkeys(spec.JOURNAL_FIELDS, 0)
+    fields.update(over)
+    return struct.pack(spec.JOURNAL_FMT, *(fields[f] for f in spec.JOURNAL_FIELDS))
+
+
+def make_page(header: bytes | None, n_records: int, journal: list[bytes] | None = None,
+              **rec_over: int) -> bytes:
+    """Opened pages default to the mandatory J0 (op_count == the header's), exactly
+    as page-open stamps it; pass journal=[] to build a benignly-impossible page."""
+    if journal is None:
+        if header is None:
+            journal = []
+        else:
+            fields = dict(zip(spec.HEADER_FIELDS, struct.unpack(spec.HEADER_FMT, header)))
+            journal = [make_journal_entry(op_count=fields["op_count"])]
+    jbody = (b"".join(journal)
+             + spec.BLANK_JOURNAL_ENTRY * (spec.JOURNAL_SLOTS - len(journal)))
     body = b"".join(make_record(t, **rec_over) for t in range(n_records))
-    page = ((header if header is not None else spec.BLANK_HEADER) + body
+    page = ((header if header is not None else spec.BLANK_HEADER) + jbody + body
             + spec.BLANK_RECORD * (spec.RECORDS_PER_PAGE - n_records))
     assert len(page) == spec.PAGE_SIZE
     return page
@@ -119,7 +138,7 @@ def test_benign_structure_rejects_foreign_page() -> None:
 def test_benign_structure_rejects_dirty_tail() -> None:
     blank = bytes([spec.ERASED_BYTE]) * spec.PAGE_SIZE
     page = bytearray(make_page(make_header(), 1))
-    off = spec.HEADER_SIZE + 3 * spec.RECORD_SIZE   # plant a record past the blank head
+    off = spec.RECORDS_OFFSET + 3 * spec.RECORD_SIZE   # plant a record past the blank head
     page[off : off + spec.RECORD_SIZE] = make_record(9)
     with pytest.raises(ValueError, match="dirty tail"):
         check_benign_structure(parse_region(region(bytes(page), blank)), "x.bin")
@@ -169,6 +188,89 @@ def test_benign_structure_rejects_broken_op_count_chain() -> None:
         make_page(make_header(page_seq=2, op_count=100), 5)))
     with pytest.raises(ValueError, match="op_count chain"):
         check_benign_structure(view, "x.bin")
+
+
+# The settings-journal invariants (spec v2): every opened page carries J0, the
+# chain is contiguous and well-formed, and the entry op_counts tie the chain to
+# the header and to the page's records.
+
+def _one_page_region(page: bytes) -> bytes:
+    return region(page, bytes([spec.ERASED_BYTE]) * spec.PAGE_SIZE)
+
+
+def test_benign_structure_rejects_missing_j0() -> None:
+    view = parse_region(_one_page_region(make_page(make_header(), 3, journal=[])))
+    with pytest.raises(ValueError, match="J0"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_journal_gap() -> None:
+    page = bytearray(make_page(make_header(), 3))
+    off = spec.JOURNAL_OFFSET + 2 * spec.JOURNAL_ENTRY_SIZE
+    page[off : off + spec.JOURNAL_ENTRY_SIZE] = make_journal_entry(op_count=2)
+    view = parse_region(_one_page_region(bytes(page)))
+    with pytest.raises(ValueError, match="after a blank"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_nonzero_reserved0() -> None:
+    bad = [make_journal_entry(reserved0=0xBEEF)]
+    view = parse_region(_one_page_region(make_page(make_header(), 3, journal=bad)))
+    with pytest.raises(ValueError, match="reserved0"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_out_of_range_units() -> None:
+    bad = [make_journal_entry(unit_temp=2)]
+    view = parse_region(_one_page_region(make_page(make_header(), 3, journal=bad)))
+    with pytest.raises(ValueError, match="units"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_j0_op_count_mismatch() -> None:
+    bad = [make_journal_entry(op_count=1)]   # header op_count is 0
+    view = parse_region(_one_page_region(make_page(make_header(), 3, journal=bad)))
+    with pytest.raises(ValueError, match="J0 op_count"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_decreasing_op_counts() -> None:
+    bad = [make_journal_entry(op_count=0),
+           make_journal_entry(unit_temp=1, op_count=2),
+           make_journal_entry(op_count=1)]
+    view = parse_region(_one_page_region(make_page(make_header(), 3, journal=bad)))
+    with pytest.raises(ValueError, match="decrease"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_benign_structure_rejects_op_count_beyond_records() -> None:
+    bad = [make_journal_entry(op_count=0),
+           make_journal_entry(unit_press=1, op_count=9)]   # only 3 records on the page
+    view = parse_region(_one_page_region(make_page(make_header(), 3, journal=bad)))
+    with pytest.raises(ValueError, match="record window"):
+        check_benign_structure(view, "x.bin")
+
+
+def test_settings_state_detects_change_entries() -> None:
+    # J0 alone (the page-open stamp) is quiet; any entry beyond it is a runtime
+    # settings change. The golden fixture carries one by design.
+    quiet = region(make_page(make_header(page_seq=1), 3),
+                   bytes([spec.ERASED_BYTE]) * spec.PAGE_SIZE)
+    assert settings_state(parse_region(quiet)) == "settings-quiet"
+    assert settings_state(parse_region(synthetic_nv_region())) == "settings-changed"
+    blank = bytes([spec.ERASED_BYTE]) * spec.REGION_SIZE
+    assert settings_state(parse_region(blank)) == "settings-quiet"
+
+
+def test_benign_structure_accepts_equal_op_counts() -> None:
+    # The FP-trap regression: two presses inside one 45 s record period stamp
+    # EQUAL op_counts -- benign, so the gate must accept it ("strictly
+    # increasing" was the audit-caught wrong rule).
+    ok = [make_journal_entry(op_count=0),
+          make_journal_entry(unit_temp=1, op_count=2),
+          make_journal_entry(unit_temp=0, op_count=2)]
+    view = parse_region(_one_page_region(make_page(make_header(), 3, journal=ok)))
+    check_benign_structure(view, "x.bin")
 
 
 def test_benign_structure_accepts_the_golden_fixture() -> None:
@@ -247,6 +349,18 @@ def test_load_samples_aborts_on_foreign_page_via_manifest(tmp_path: Path) -> Non
         load_samples(manifest, ("campaign",), quarantine=frozenset())
 
 
+def test_load_samples_refuses_spec_v1_capture(tmp_path: Path) -> None:
+    # The rehearsal fence: a banked v1 capture (version 1 in its header bytes)
+    # must be refused BY NAME, not spill a generic FOREIGN abort.
+    nv = region(make_page(make_header(version=1), 3),
+                bytes([spec.ERASED_BYTE]) * spec.PAGE_SIZE)
+    md5 = _write_capture(tmp_path, "old.bin", nv)
+    manifest = tmp_path / "manifest.jsonl"
+    write_manifest(manifest, [_rec("old.bin", "campaign", md5=md5)])
+    with pytest.raises(ValueError, match="spec v1"):
+        load_samples(manifest, ("campaign",), quarantine=frozenset())
+
+
 def test_load_samples_honors_quarantine(tmp_path: Path) -> None:
     # The designed recovery from a structurally-bad capture: quarantining its name
     # unblocks every future assembly run without touching the append-only manifest.
@@ -270,12 +384,32 @@ def test_load_samples_flags_out_of_range(tmp_path: Path) -> None:
     assert sample.n_torn == 0             # a real range bug, not a torn write
 
 
+def test_dataset_cli_warns_on_duplicate_md5(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Byte-identical duplicates double-weight training and can leak the exam
+    # (the v1 dry run found real ones); the sanity CLI warns, never aborts --
+    # two legitimately identical captures must not become a false-positive trap.
+    md5_a = _write_capture(tmp_path, "a.bin", synthetic_nv_region())
+    md5_b = _write_capture(tmp_path, "b.bin", synthetic_nv_region())
+    assert md5_a == md5_b
+    manifest = tmp_path / "manifest.jsonl"
+    write_manifest(manifest, [_rec("a.bin", "campaign", md5=md5_a),
+                              _rec("b.bin", "campaign", md5=md5_b)])
+    monkeypatch.setattr(dataset_mod, "DEFAULT_MANIFEST", manifest)
+    assert dataset_mod.main(["campaign"]) == 0
+    out = capsys.readouterr().out
+    assert "duplicate" in out and "a.bin" in out and "b.bin" in out
+
+
 def test_load_samples_counts_torn_records(tmp_path: Path) -> None:
     # A reset inside the record program leaves the second doubleword erased:
     # hum+press read 0xFFFFFFFF. Marked as torn (and out of range), never repaired.
     erased = 0xFFFFFFFF
     body = (make_record(0) + make_record(45, hum=erased, press=erased) + make_record(90))
-    page = (make_header(page_seq=1) + body
+    page = (make_header(page_seq=1)
+            + make_journal_entry() + spec.BLANK_JOURNAL_ENTRY * (spec.JOURNAL_SLOTS - 1)
+            + body
             + spec.BLANK_RECORD * (spec.RECORDS_PER_PAGE - 3))
     nv = region(page, bytes([0xFF]) * spec.PAGE_SIZE)
     md5 = _write_capture(tmp_path, "torn.bin", nv)
@@ -288,14 +422,16 @@ def test_load_samples_counts_torn_records(tmp_path: Path) -> None:
 
 # ---- split -------------------------------------------------------------------------
 
-def _fake_samples(states: dict[str, int]) -> list[Sample]:
+def _fake_samples(states: dict[str, int], settings: str = "settings-quiet",
+                  prefix: str = "cap") -> list[Sample]:
     out: list[Sample] = []
     i = 0
     for state, n in states.items():
         for _ in range(n):
-            out.append(Sample(record=_rec(f"cap{i:03d}.bin", "campaign"),
+            out.append(Sample(record=_rec(f"{prefix}{i:03d}.bin", "campaign"),
                               x=np.zeros(N_DIMS, dtype=np.float32),
-                              fill_state=state, n_records=0, n_torn=0, range_ok=True))
+                              fill_state=state, settings_state=settings,
+                              n_records=0, n_torn=0, range_ok=True))
             i += 1
     return out
 
@@ -311,6 +447,19 @@ def test_choose_holdout_stratified_and_deterministic() -> None:
     assert any("only 1" in n for n in notes)
     again, _ = choose_holdout(samples, fraction=0.2, seed=7)
     assert [s.record.file for s in again] == [s.record.file for s in chosen]
+
+
+def test_choose_holdout_stratifies_settings_state() -> None:
+    # Captures with journal change entries are their own stratum: the exam holds
+    # some out while training keeps the rest -- neither side may go uncovered.
+    samples = (_fake_samples({"steady": 8}, prefix="q")
+               + _fake_samples({"steady": 4}, settings="settings-changed", prefix="c"))
+    chosen, _ = choose_holdout(samples, fraction=0.25, seed=11)
+    by_stratum: dict[str, int] = {}
+    for s in chosen:
+        key = f"{s.fill_state}/{s.settings_state}"
+        by_stratum[key] = by_stratum.get(key, 0) + 1
+    assert by_stratum == {"steady/settings-quiet": 2, "steady/settings-changed": 1}
 
 
 def test_choose_holdout_never_empties_a_stratum() -> None:

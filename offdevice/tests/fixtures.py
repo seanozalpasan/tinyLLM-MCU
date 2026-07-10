@@ -1,10 +1,11 @@
 """Deterministic synthetic input for tests -- no external/real data.
 
-One closed-form, spec-conformant 4 KB NV image: valid page headers, records on
-their 16 B stride with in-range triangle-wave values, a monotonic timestamp, and
-a blank (0xFF) tail -- the byte regime the re-tuned features actually see, unlike
-random bytes. NOT training data. Every constant below is FROZEN -- changing any
-of them invalidates the golden vector (offdevice/tests/make_golden.py).
+One closed-form, spec-conformant 4 KB NV image: valid page headers, settings-
+journal chains (J0 per page + one mid-page unit change), records on their 16 B
+stride with in-range triangle-wave values, a monotonic timestamp, and a blank
+(0xFF) tail -- the byte regime the re-tuned features actually see, unlike random
+bytes. NOT training data. Every constant below is FROZEN -- changing any of them
+invalidates the golden vector (offdevice/tests/make_golden.py).
 """
 
 import struct
@@ -19,6 +20,11 @@ BOOT_COUNT = 2
 PAGE0_OP = 2 * spec.RECORDS_PER_PAGE          # two prior page-fills
 PAGE1_OP = PAGE0_OP + spec.RECORDS_PER_PAGE
 PAGE1_RECORDS = 60
+
+# Settings journal: every page-open stamps J0 (op_count == the header's); page1
+# also carries one mid-page change (temp unit -> F) so the golden input exercises
+# the journal-parse path and the settings-changed stratum.
+PAGE1_CHANGE_AT = 20   # records into page1 when the change landed
 
 TS_FIRST = 1000     # seconds since boot at the oldest record
 TS_STEP = 45        # == the deploy-rate record period
@@ -48,6 +54,14 @@ def _header(page_seq: int, op_count: int) -> bytes:
                        page_seq, BOOT_COUNT, op_count, *_STATS)
 
 
+def _journal_entry(unit_temp: int, unit_press: int, op_count: int) -> bytes:
+    return struct.pack(spec.JOURNAL_FMT, unit_temp, unit_press, 0, op_count)
+
+
+def _journal(entries: tuple[bytes, ...]) -> bytes:
+    return b"".join(entries) + spec.BLANK_JOURNAL_ENTRY * (spec.JOURNAL_SLOTS - len(entries))
+
+
 def _record(i: int) -> bytes:
     temp = TEMP_MID + _tri(i, TEMP_PER, TEMP_AMP)
     hum = HUM_MID - _tri(i, TEMP_PER, TEMP_AMP) // 2
@@ -57,10 +71,14 @@ def _record(i: int) -> bytes:
 
 def synthetic_nv_region() -> bytes:
     """Return the deterministic 4 KB NV image used as the golden-vector input."""
-    page0 = _header(PAGE0_SEQ, PAGE0_OP) + b"".join(
-        _record(i) for i in range(spec.RECORDS_PER_PAGE))
-    page1 = _header(PAGE1_SEQ, PAGE1_OP) + b"".join(
-        _record(spec.RECORDS_PER_PAGE + i) for i in range(PAGE1_RECORDS))
+    page0 = (_header(PAGE0_SEQ, PAGE0_OP)
+             + _journal((_journal_entry(spec.UNIT_TEMP_C, spec.UNIT_PRESS_HPA, PAGE0_OP),))
+             + b"".join(_record(i) for i in range(spec.RECORDS_PER_PAGE)))
+    page1 = (_header(PAGE1_SEQ, PAGE1_OP)
+             + _journal((_journal_entry(spec.UNIT_TEMP_C, spec.UNIT_PRESS_HPA, PAGE1_OP),
+                         _journal_entry(spec.UNIT_TEMP_F, spec.UNIT_PRESS_HPA,
+                                        PAGE1_OP + PAGE1_CHANGE_AT)))
+             + b"".join(_record(spec.RECORDS_PER_PAGE + i) for i in range(PAGE1_RECORDS)))
     page1 += bytes([spec.ERASED_BYTE]) * (spec.PAGE_SIZE - len(page1))
     region = page0 + page1
     assert len(region) == spec.REGION_SIZE

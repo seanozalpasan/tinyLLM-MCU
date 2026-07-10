@@ -5,7 +5,10 @@ Byte-for-byte mirror of what the firmware's nv_logger.c writes -- both sides
 obey offdevice/nv/spec.py (contract #1). Benign-strict: anything violating the
 layout (foreign header, a written slot after the head) is reported, never
 repaired -- in a real capture such a violation IS the class of structural
-anomaly the IDS hunts.
+anomaly the IDS hunts. The settings journal is reported the same way: slots,
+blanks, and the contiguous chain are facts; whether they are BENIGN facts is
+the training gate's call (model/dataset.py), never this parser's -- the eval
+path must push corrupt regions through a neutral reader.
 
 Eyeball a capture (accepts a 256 KB dump or a bare 4 KB slice):
     python -m offdevice.nv.parse offdevice\\data\\captures\\<capture>.bin
@@ -25,9 +28,11 @@ DUMP_SIZE = spec.DUMP_OFFSET + spec.REGION_SIZE   # the NV region ends the 256 K
 
 @dataclass(frozen=True)
 class PageView:
-    """One parsed 2 KB page: header (None = blank or foreign bytes) + records."""
+    """One parsed 2 KB page: header (None = blank/foreign) + journal + records."""
 
     header: dict[str, int] | None
+    journal: tuple[dict[str, int] | None, ...]   # slots J0..J3; None = blank (all 0xFF)
+    journal_tail_clean: bool              # no written slot after the journal's first blank
     records: tuple[dict[str, int], ...]   # non-blank slots up to the head, in order
     tail_clean: bool                      # nothing written after the first blank slot
     blank: bool                           # the whole page reads erased (all 0xFF)
@@ -68,15 +73,53 @@ def parse_header(page: bytes) -> dict[str, int] | None:
     return fields
 
 
+def parse_journal(page: bytes) -> tuple[tuple[dict[str, int] | None, ...], bool]:
+    """The four journal slots (None = blank) + whether the slot tail is clean.
+
+    Every non-blank slot unpacks and is reported verbatim -- garbage values
+    included. Chain semantics (J0 present, contiguity, op_count rules) are the
+    training gate's to judge, not this parser's.
+    """
+    slots: list[dict[str, int] | None] = []
+    blank_seen = False
+    tail_clean = True
+    for i in range(spec.JOURNAL_SLOTS):
+        off = spec.JOURNAL_OFFSET + i * spec.JOURNAL_ENTRY_SIZE
+        raw = page[off : off + spec.JOURNAL_ENTRY_SIZE]
+        if raw == spec.BLANK_JOURNAL_ENTRY:
+            slots.append(None)
+            blank_seen = True
+        else:
+            if blank_seen:
+                tail_clean = False   # written past a blank: the firmware never does this
+            slots.append(dict(zip(spec.JOURNAL_FIELDS, struct.unpack(spec.JOURNAL_FMT, raw))))
+    return tuple(slots), tail_clean
+
+
+def journal_chain(page: PageView) -> tuple[dict[str, int], ...]:
+    """The contiguous entry chain from J0 -- the slots before the first blank.
+
+    The chain END is what boot adopts as the live setting (position in the page
+    is not time of writing). A written slot past a blank is never part of the
+    chain: it stays visible in .journal for the gate to flag.
+    """
+    chain: list[dict[str, int]] = []
+    for slot in page.journal:
+        if slot is None:
+            break
+        chain.append(slot)
+    return tuple(chain)
+
+
 def parse_page(page: bytes) -> PageView:
-    """Parse one 2 KB page: records run from the header to the first blank slot."""
+    """Parse one 2 KB page: journal after the header, records from RECORDS_OFFSET on."""
     if len(page) != spec.PAGE_SIZE:
         raise ValueError(f"expected a {spec.PAGE_SIZE}-byte page, got {len(page)}")
     records: list[dict[str, int]] = []
     head_seen = False
     tail_clean = True
     for i in range(spec.RECORDS_PER_PAGE):
-        off = spec.HEADER_SIZE + i * spec.RECORD_SIZE
+        off = spec.RECORDS_OFFSET + i * spec.RECORD_SIZE
         raw = page[off : off + spec.RECORD_SIZE]
         if raw == spec.BLANK_RECORD:
             head_seen = True
@@ -85,14 +128,16 @@ def parse_page(page: bytes) -> PageView:
         else:
             records.append(dict(zip(spec.RECORD_FIELDS, struct.unpack(spec.RECORD_FMT, raw))))
     header = parse_header(page)
+    journal, journal_tail_clean = parse_journal(page)
     # struct's "x" skips the pad on unpack, so surface its state as a separate
     # fact: the firmware programs it as HEADER_PAD_FILL, and anything else means
     # a rewritten/foreign header. Reported, never judged -- the training gate
     # (model/dataset.py) decides; the eval injector needs this parser neutral.
     pad = page[spec.HEADER_SIZE - spec.HEADER_PAD : spec.HEADER_SIZE]
     pad_clean = header is None or pad == bytes([spec.HEADER_PAD_FILL]) * spec.HEADER_PAD
-    return PageView(header, tuple(records), tail_clean,
-                    page == b"\xff" * spec.PAGE_SIZE, pad_clean)
+    return PageView(header=header, journal=journal, journal_tail_clean=journal_tail_clean,
+                    records=tuple(records), tail_clean=tail_clean,
+                    blank=page == b"\xff" * spec.PAGE_SIZE, pad_clean=pad_clean)
 
 
 def parse_region(nv: bytes) -> RegionView:
@@ -130,10 +175,16 @@ def _page_line(i: int, p: PageView) -> str:
     line = (f"page{i} @0x{base:08X}: seq={h['page_seq']} boot={h['boot_count']} "
             f"op={h['op_count']} used={len(p.records)}/{spec.RECORDS_PER_PAGE} "
             f"tail={'clean' if p.tail_clean else 'DIRTY'}")
+    slots = "  ".join(
+        f"J{n}=blank" if s is None else
+        f"J{n}[temp={s['unit_temp']} press={s['unit_press']} res0={s['reserved0']} op={s['op_count']}]"
+        for n, s in enumerate(p.journal))
+    if not p.journal_tail_clean:
+        slots = f"{slots}  JOURNAL TAIL DIRTY (written slot after a blank)"
     stats = "  ".join(
         f"{ch.name}[{h[f'{ch.name}_min']}..{h[f'{ch.name}_max']} mean={h[f'{ch.name}_mean']}]"
         for ch in spec.CHANNELS)
-    return f"{line}\n        {stats}"
+    return f"{line}\n        {slots}\n        {stats}"
 
 
 def summarize(nv: bytes) -> str:

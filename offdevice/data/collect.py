@@ -228,7 +228,7 @@ def main() -> int:
         description="Unattended benign-capture loop: reset the board, capture, sleep, repeat.")
     ap.add_argument("variant", help="campaign tag for filenames + manifest, e.g. nv45s-lab-w1")
     ap.add_argument("--interval", type=float, default=2.0,
-                    help="hours between captures (default 2.0; ring turnover at 45 s is ~3.1 h)")
+                    help="hours between captures (default 2.0; ring turnover at 45 s is ~3 h)")
     ap.add_argument("--count", type=int, default=None,
                     help="stop after N captures (default: run until Ctrl+C)")
     ap.add_argument("--fresh", action="store_true",
