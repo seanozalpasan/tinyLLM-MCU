@@ -37,12 +37,28 @@
 /* USER CODE BEGIN PD */
 
 /* ---- Test-bed A: outbound telemetry frame (STM32 -> ESP32 over USART3) ----
-   Carries the SAME reading the logger just wrote to NV (one source, two sinks):
-   [A5 5A][seq u32][ts u32][temp i32][hum u32][press u32][xor], all LE. seq =
-   lifetime record count, so the listener can spot gaps across boots. */
+   Carries the SAME reading the logger just wrote to NV (one source, two sinks),
+   CONVERTED to the live display units -- flash keeps the canonical bytes, the
+   frame says what the user asked for:
+   [A5 5A][seq u32][ts u32][temp i32][hum u32][press u32][units][xor], all LE.
+   units: bit0 = temp (0 degC / 1 degF), bit1 = press (0 hPa / 1 inHg), rest 0.
+   seq = lifetime record count, so the listener can spot gaps across boots. */
 #define TELE_MAGIC0     0xA5u
 #define TELE_MAGIC1     0x5Au
-#define TELE_FRAME_LEN  23u
+#define TELE_FRAME_LEN  24u
+#define TELE_UNITS_TEMP_F      0x01u
+#define TELE_UNITS_PRESS_INHG  0x02u
+
+/* ---- B2 (USER button, PC13, pressed = HIGH): runtime settings input ----
+   Single quick press toggles the temperature unit, double press the pressure
+   unit. Gestures register on RELEASE, so enrollment's hold-through-reset can
+   never toggle anything (the release is never seen), and a press held past
+   BTN_HOLD_MS is swallowed as a hold. Timings use HAL_GetTick; the ~50 ms
+   loop cadence samples finely enough for deliberate human presses (a press
+   must be held roughly 100-150 ms to register). */
+#define BTN_CONFIRM_MS  100u   /* pin HIGH this long = a real press, not chatter */
+#define BTN_HOLD_MS     1000u  /* held past this = a hold (enrollment), ignored  */
+#define BTN_DOUBLE_MS   400u   /* window after release for a double's 2nd press  */
 
 /* ESP32 -> STM32 reverse-path test frame (proves 2-way UART; the direction the attack
    scenario will later use to feed corrupt data in): [0x5A 0xA5][cnt u32 LE][xor]. */
@@ -90,7 +106,11 @@ static void MX_GPIO_Init(void);
 void SystemClock_Config(void);
 
 /* USER CODE BEGIN PFP */
+#if NV_LOGGER   /* these lean on nv_logger symbols that compile out with it */
+static void Tele_Convert(const NvReading *r, int32_t *temp, uint32_t *press, uint8_t *units);
 static void Tele_BuildFrame(uint8_t *buf, const NvReading *r);
+static void Button_Poll(void);
+#endif
 static void Uart3_Init(void);
 static void Uart3_Write(const uint8_t *buf, uint32_t len);
 static void Uart3_Poll(void);
@@ -253,9 +273,22 @@ int main(void)
   SECURE_print_Log("[NS] Test-bed A: USART3 telemetry init (PC10 TX -> mikroBUS UART)\r\n");
 
 #if NV_LOGGER
-  /* The benign workload: recover (or clean-start) the NV ring, then let the main
-     loop below log + telemeter on the configured record period. */
+  /* The benign workload: recover (or clean-start) the NV ring + the display
+     units, then let the main loop below log + telemeter on the configured
+     record period. */
   NvLogger_Init();
+
+  /* B2/PC13 as the runtime settings input (same input+pulldown config the
+     Secure boot check uses). The Secure side hands the pin over only AFTER its
+     enrollment read -- GOTCHA: an ungranted NonSecure read silently returns
+     zeros, so a missing grant looks like "button never pressed", not an error. */
+  {
+    GPIO_InitTypeDef gb = {0};
+    gb.Pin  = GPIO_PIN_13;
+    gb.Mode = GPIO_MODE_INPUT;
+    gb.Pull = GPIO_PULLDOWN;
+    HAL_GPIO_Init(GPIOC, &gb);
+  }
 #endif
 
   /* USER CODE END 2 */
@@ -270,27 +303,38 @@ int main(void)
     {
 #if NV_LOGGER
       NvReading r;
+      Button_Poll();   /* B2 gesture decode: settings toggles land here */
       if (NvLogger_Poll(&r))
       {
-        /* Sink 2: the same reading the logger just wrote to NV goes out USART3.
-           Handshake still deferred: HS is read + printed, not gating. */
+        /* Sink 2: the same reading the logger just wrote to NV goes out USART3,
+           converted to the live display units (the flash record stays
+           canonical). Handshake still deferred: HS is read + printed, not
+           gating. Console and frame use the SAME conversion, so the listener
+           mirror check is 1:1 by construction. */
         GPIO_PinState hs = HAL_GPIO_ReadPin(TELE_HS_PORT, TELE_HS_PIN);
-        const uint32_t at = (r.temp < 0) ? (uint32_t)(-r.temp) : (uint32_t)r.temp;
-        char msg[128];
+        int32_t  dtemp;
+        uint32_t dpress;
+        uint8_t  units;
+        char msg[144];
 
         Tele_BuildFrame(tele_frame, &r);
         Uart3_Write(tele_frame, TELE_FRAME_LEN);
+
+        Tele_Convert(&r, &dtemp, &dpress, &units);
+        const uint32_t at = (dtemp < 0) ? (uint32_t)(-dtemp) : (uint32_t)dtemp;
 
         /* GOTCHA: SECURE_print_Log treats the message as a printf FORMAT string on
            the secure side, so a literal '%' (e.g. "44.95%") is eaten as a bogus
            conversion. Keep veneer messages %-free; RH is in percent by definition. */
         snprintf(msg, sizeof(msg),
-                 "[NS] HS=%d op=%lu ts=%lu T=%s%lu.%02luC RH=%lu.%02lu P=%lu.%02luhPa tx=OK\r\n",
+                 "[NS] HS=%d op=%lu ts=%lu T=%s%lu.%02lu%s RH=%lu.%02lu P=%lu.%02lu%s tx=OK\r\n",
                  (hs == GPIO_PIN_SET) ? 1 : 0,
                  (unsigned long)r.op, (unsigned long)r.ts,
-                 (r.temp < 0) ? "-" : "", (unsigned long)(at / 100u), (unsigned long)(at % 100u),
+                 (dtemp < 0) ? "-" : "", (unsigned long)(at / 100u), (unsigned long)(at % 100u),
+                 ((units & TELE_UNITS_TEMP_F) != 0u) ? "F" : "C",
                  (unsigned long)(r.hum / 100u), (unsigned long)(r.hum % 100u),
-                 (unsigned long)(r.press / 100u), (unsigned long)(r.press % 100u));
+                 (unsigned long)(dpress / 100u), (unsigned long)(dpress % 100u),
+                 ((units & TELE_UNITS_PRESS_INHG) != 0u) ? "inHg" : "hPa");
         SECURE_print_Log(msg);
       }
 #endif
@@ -402,6 +446,8 @@ static void NonSecureNonSecureTransferCompleteCallback(DMA_HandleTypeDef *hdma_m
 
 /* USER CODE BEGIN 4 */
 
+#if NV_LOGGER   /* telemetry conversion + B2 gestures ride the logger build */
+
 static void Tele_PutU32(uint8_t *p, uint32_t v)
 {
   p[0] = (uint8_t)(v         & 0xFFu);
@@ -410,24 +456,123 @@ static void Tele_PutU32(uint8_t *p, uint32_t v)
   p[3] = (uint8_t)((v >> 24) & 0xFFu);
 }
 
+/* degF x100 from degC x100: (t*9)/5 + 3200, division rounded to NEAREST --
+   the divisor 5 is odd so an exact half can't occur, and adding +/-2 before
+   C99's truncate-toward-zero division lands on the nearest integer for either
+   sign. 23.50 C -> 74.30 F; -40.00 C -> -40.00 F (the real crossover). */
+static int32_t Conv_TempF100(int32_t c100)
+{
+  const int32_t x = c100 * 9;
+  return ((x >= 0) ? (x + 2) : (x - 2)) / 5 + 3200;
+}
+
+/* inHg x100 from hPa x100 (numerically pascals): the conventional inch of
+   mercury is 3386.389 Pa (NIST), so inHg x100 = Pa * 100000 / 3386389, rounded
+   to nearest by adding half the divisor; 64-bit because 110000 Pa * 100000
+   overflows 32 bits. 1013.25 hPa -> 29.92 inHg (the standard atmosphere). */
+static uint32_t Conv_PressInHg100(uint32_t pa)
+{
+  return (uint32_t)(((uint64_t)pa * 100000ULL + 1693194ULL) / 3386389ULL);
+}
+
+/* Convert a canonical reading to the live display units + the frame's units
+   byte. The single conversion point for BOTH the frame and the console line,
+   so the two can never diverge. */
+static void Tele_Convert(const NvReading *r, int32_t *temp, uint32_t *press, uint8_t *units)
+{
+  const NvSettings st = NvLogger_Settings();
+  *temp  = (st.unit_temp  == NV_UNIT_TEMP_F)     ? Conv_TempF100(r->temp)      : r->temp;
+  *press = (st.unit_press == NV_UNIT_PRESS_INHG) ? Conv_PressInHg100(r->press) : r->press;
+  *units = (uint8_t)(((st.unit_temp  == NV_UNIT_TEMP_F)     ? TELE_UNITS_TEMP_F     : 0u)
+                   | ((st.unit_press == NV_UNIT_PRESS_INHG) ? TELE_UNITS_PRESS_INHG : 0u));
+}
+
 /**
-  * @brief  Build the 23-byte telemetry frame from a logged reading:
+  * @brief  Build the 24-byte telemetry frame from a logged reading, converted
+  *         to the live display units:
   *         [0]=0xA5 [1]=0x5A [2..5]=seq(op) [6..9]=ts [10..13]=temp(i32)
-  *         [14..17]=hum [18..21]=press (all LE) [22]=XOR of bytes 0..21.
+  *         [14..17]=hum [18..21]=press (all LE) [22]=units [23]=XOR of 0..22.
   */
 static void Tele_BuildFrame(uint8_t *buf, const NvReading *r)
 {
-  uint8_t x = 0u;
+  int32_t  temp;
+  uint32_t press;
+  uint8_t  units;
+  uint8_t  x = 0u;
+
+  Tele_Convert(r, &temp, &press, &units);
   buf[0] = TELE_MAGIC0;
   buf[1] = TELE_MAGIC1;
   Tele_PutU32(&buf[2],  r->op);
   Tele_PutU32(&buf[6],  r->ts);
-  Tele_PutU32(&buf[10], (uint32_t)r->temp);
+  Tele_PutU32(&buf[10], (uint32_t)temp);
   Tele_PutU32(&buf[14], r->hum);
-  Tele_PutU32(&buf[18], r->press);
+  Tele_PutU32(&buf[18], press);
+  buf[22] = units;
   for (uint32_t i = 0u; i < TELE_FRAME_LEN - 1u; i++) { x ^= buf[i]; }
   buf[TELE_FRAME_LEN - 1u] = x;
 }
+
+/**
+  * @brief  B2 gesture decoder, called every main-loop pass (~50 ms). Single
+  *         quick press -> toggle temperature unit; double press -> toggle
+  *         pressure unit; anything held past BTN_HOLD_MS -> swallowed (that is
+  *         enrollment's gesture, or a changed mind). Actions fire on RELEASE
+  *         only, so a hold-through-reset never toggles anything. A second
+  *         press shorter than BTN_CONFIRM_MS cancels the whole gesture rather
+  *         than falling back to a single (toggling the WRONG unit would be
+  *         worse than doing nothing).
+  */
+static void Button_Poll(void)
+{
+  /* States: 0 idle | 1 confirming 1st press | 2 1st press down |
+             3 released, double window open | 4 confirming 2nd press |
+             5 2nd press down | 6 over-long press, wait for release. */
+  static uint8_t  st = 0u;
+  static uint32_t t0 = 0u;   /* tick at the state's reference edge */
+  const uint32_t now = HAL_GetTick();
+  const int hi = (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_SET);
+
+  switch (st)
+  {
+    case 0u:                                    /* idle: wait for a press edge */
+      if (hi) { st = 1u; t0 = now; }
+      break;
+    case 1u:                                    /* chatter filter, 1st press */
+      if (!hi)                     { st = 0u; }
+      else if (now - t0 >= BTN_CONFIRM_MS) { st = 2u; }
+      break;
+    case 2u:                                    /* 1st press held (t0 = press edge) */
+      if (!hi)                     { st = 3u; t0 = now; }
+      else if (now - t0 >= BTN_HOLD_MS)    { st = 6u; }
+      break;
+    case 3u:                                    /* double window (t0 = release) */
+      if (hi)                      { st = 4u; t0 = now; }
+      else if (now - t0 >= BTN_DOUBLE_MS)
+      {
+        st = 0u;
+        (void)NvLogger_ToggleTempUnit();        /* single press */
+      }
+      break;
+    case 4u:                                    /* chatter filter, 2nd press */
+      if (!hi)                     { st = 0u; } /* blip: cancel the gesture */
+      else if (now - t0 >= BTN_CONFIRM_MS) { st = 5u; }
+      break;
+    case 5u:                                    /* 2nd press held (t0 = press edge) */
+      if (!hi)
+      {
+        st = 0u;
+        (void)NvLogger_TogglePressUnit();       /* double press */
+      }
+      else if (now - t0 >= BTN_HOLD_MS)    { st = 6u; }
+      break;
+    default:                                    /* 6: swallow the over-long press */
+      if (!hi) { st = 0u; }
+      break;
+  }
+}
+
+#endif /* NV_LOGGER */
 
 /**
   * @brief  Bring up USART3 on PC10 TX / PC11 RX (AF7) for Test-bed A telemetry over the

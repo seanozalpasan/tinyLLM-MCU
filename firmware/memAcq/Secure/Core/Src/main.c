@@ -195,6 +195,13 @@ int main(void)
      the console is up, in every build -- dump builds included. */
   StaticHash_BootCheck();
 
+  /* Hand B2/PC13 to the NonSecure world (runtime settings input) -- only AFTER
+     the enrollment read above, so the boot check always samples the button
+     under secure ownership. GOTCHA: pins reset SECURE, and an ungranted
+     NonSecure read is silently RAZ/WI -- the NS code would run fine and just
+     never see a press. GPIOC's clock is already on (MX_GPIO_Init). */
+  HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_13, GPIO_PIN_NSEC);
+
   /* Bring up OSPI XIP at 0x90000000. Must run before HAL_SuspendTick() (it uses HAL_Delay).
      Leaves OCTOSPI1 in memory-mapped mode so the non-secure world can read it after the jump. */
   printf("\r\n[S ] OSPI XIP: bringing up OCTOSPI1 (init + flash reset + octal mode)...\r\n");

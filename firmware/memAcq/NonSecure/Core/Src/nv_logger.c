@@ -3,16 +3,24 @@
  *
  * Evolved from the ns-flash_static_proof append-log demo: the same
  * direct-register NS-flash doubleword programming, now writing the structured
- * nv_spec.h layout (per 2 KB page: [NvHeader 64 B][124 x NvRecord 16 B]) into
- * pages 126/127. This is the byte surface the one-class ML learns, so realism
- * comes from RULES -- bounded ranges, correlated channels, per-channel refresh
- * periods, monotonic timestamps -- never from unpredictable churn: churn widens
- * the benign spread, and detectability = anomaly distance / benign spread.
+ * nv_spec.h layout (per 2 KB page: [NvHeader 64 B][4 x NvJournalEntry 8 B]
+ * [122 x NvRecord 16 B]) into pages 126/127. This is the byte surface the
+ * one-class ML learns, so realism comes from RULES -- bounded ranges,
+ * correlated channels, per-channel refresh periods, monotonic timestamps --
+ * never from unpredictable churn: churn widens the benign spread, and
+ * detectability = anomaly distance / benign spread.
+ *
+ * The settings journal persists the display units (B2 presses): page-open
+ * stamps J0 from RAM, each runtime change programs the next blank slot, and
+ * the live setting is the end of the contiguous chain, found once at boot.
+ * Records stay canonical regardless -- units change what telemetry says,
+ * never what flash stores.
  *
  * Flash discipline: after NvLogger_Init() nothing is ever read back from flash;
- * all write-side state (page, slot, counters, stats) lives in RAM. That dodges
- * the L5 stale read-after-write hazard (a just-programmed doubleword can read
- * stale through the flash cache in the same boot; the write itself is correct).
+ * all write-side state (page, slot, counters, stats, settings) lives in RAM.
+ * That dodges the L5 stale read-after-write hazard (a just-programmed
+ * doubleword can read stale through the flash cache in the same boot; the
+ * write itself is correct).
  */
 
 #include "nv_logger.h"
@@ -120,6 +128,9 @@ typedef struct
 
 static uint32_t  s_page_base;      /* current page base; 0 = none opened yet    */
 static uint32_t  s_slot;           /* next record slot in the current page      */
+static uint32_t  s_journal_used;   /* written journal slots in the current page */
+static uint8_t   s_unit_temp;      /* live display units -- the RAM shadow of   */
+static uint8_t   s_unit_press;     /*   the journal chain end (read at Init)    */
 static uint32_t  s_page_seq;       /* seq of the current page (next open = +1)  */
 static uint32_t  s_boot_count;     /* this boot's number, stamped at page-opens */
 static uint32_t  s_op_count;       /* records fully programmed, lifetime        */
@@ -205,6 +216,137 @@ static void fault(const char *what)
   SECURE_print_Log(msg);
 }
 
+/* ===== display-unit settings (the spec's per-page journal) ===== */
+
+/* Toggle one display unit (which: 0 = temperature, 1 = pressure) by programming
+   the NEXT BLANK journal slot -- FLASH FIRST, RAM SECOND, so a flash fault
+   refuses the change and RAM can never disagree with the journal. A journal
+   slot is one doubleword, so a reset mid-write leaves it fully written or
+   still blank, never half a setting. Returns 0 on success, -1 refused. */
+static int settings_toggle(int which)
+{
+  union { NvJournalEntry e; uint64_t dw; } u;
+  char msg[80];
+  int err;
+
+  if (s_fault != 0u) { return -1; }
+  if (s_page_base == 0u)
+  {
+    /* Virgin/wiped ring with the first record still pending: no page to
+       journal into yet. Self-heals within one record period (that record's
+       page-open stamps J0); refusing keeps RAM == journal. */
+    SECURE_print_Log("[NVSET] refused: no page open yet (first record pending)\r\n");
+    return -1;
+  }
+  if (s_journal_used >= NV_JOURNAL_SLOTS)
+  {
+    SECURE_print_Log("[NVSET] refused: journal full until next page rotation\r\n");
+    return -1;
+  }
+
+  memset(&u, 0, sizeof(u));
+  u.e.unit_temp  = (which == 0) ? (uint8_t)(s_unit_temp ^ 1u) : s_unit_temp;
+  u.e.unit_press = (which == 1) ? (uint8_t)(s_unit_press ^ 1u) : s_unit_press;
+  u.e.reserved0  = 0u;
+  u.e.op_count   = s_op_count;   /* binds the change to its spot in the record stream */
+
+  Nv_Unlock();
+  err = Nv_ProgramDW(s_page_base + NV_JOURNAL_OFFSET
+                     + s_journal_used * NV_JOURNAL_ENTRY_SIZE, u.dw);
+  Nv_Lock();
+  if (err != 0)
+  {
+    SECURE_print_Log("[NVSET] refused: journal flash write failed (RAM unchanged)\r\n");
+    return -1;
+  }
+
+  s_journal_used++;
+  s_unit_temp  = u.e.unit_temp;
+  s_unit_press = u.e.unit_press;
+  snprintf(msg, sizeof(msg), "[NVSET] units now: temp=deg%s press=%s\r\n",
+           (s_unit_temp == NV_UNIT_TEMP_F) ? "F" : "C",
+           (s_unit_press == NV_UNIT_PRESS_INHG) ? "inHg" : "hPa");
+  SECURE_print_Log(msg);
+  return 0;
+}
+
+#if NV_SETTINGS_EXERCISE
+/* ===== settings-exercise schedule (campaign builds only) =====
+   A page's plan is a pure function of (NV_EXERCISE_SEED, page index), where
+   page index = lifetime record index / records-per-page -- valid because every
+   page holds exactly NV_RECORDS_PER_PAGE records and op_count only resets with
+   a ring wipe, so page boundaries sit at exact op_count multiples. Change
+   count per page: 0/1/2/3 with weights 184/56/10/6 of 256 (~72% of pages stay
+   J0-only, ~2% fill the journal), at most the 3 free slots after J0 -- the
+   schedule can never hit the journal-full refusal by construction. */
+
+/* 32-bit avalanche mixer (murmur3-style finalizer): consecutive page indices
+   and seed bits decorrelate fully, so the plan sequence has no visible pattern
+   while staying exactly reproducible from (seed, page). */
+static uint32_t ex_mix(uint32_t x)
+{
+  x ^= x >> 16;  x *= 0x7FEB352Du;
+  x ^= x >> 15;  x *= 0x846CA68Bu;
+  x ^= x >> 16;
+  return x;
+}
+
+/* This page's planned changes: fills off[] (record index within the page,
+   strictly ascending) and press[] (0 = toggle temperature, 1 = pressure);
+   returns the count, 0..3. */
+static uint32_t ex_plan(uint32_t page, uint8_t off[3], uint8_t press[3])
+{
+  uint32_t h = ex_mix(NV_EXERCISE_SEED ^ (page * 2654435761u));
+  const uint32_t b = h >> 24;
+  uint32_t n = (b < 184u) ? 0u : ((b < 240u) ? 1u : ((b < 250u) ? 2u : 3u));
+
+  for (uint32_t i = 0u; i < n; i++)
+  {
+    h = ex_mix(h + 0x9E3779B9u);
+    off[i]   = (uint8_t)(h % NV_RECORDS_PER_PAGE);
+    press[i] = (uint8_t)((h >> 8) & 1u);
+  }
+
+  /* Sort ascending (insertion, n <= 3), then nudge collisions one record
+     forward; a nudge past the last record just drops that change. */
+  for (uint32_t i = 1u; i < n; i++)
+  {
+    const uint8_t o = off[i], p = press[i];
+    uint32_t j = i;
+    while ((j > 0u) && (off[j - 1u] > o)) { off[j] = off[j - 1u]; press[j] = press[j - 1u]; j--; }
+    off[j] = o;  press[j] = p;
+  }
+  for (uint32_t i = 1u; i < n; i++)
+  {
+    if (off[i] <= off[i - 1u])
+    {
+      if ((uint32_t)off[i - 1u] + 1u >= NV_RECORDS_PER_PAGE) { n = i; break; }
+      off[i] = (uint8_t)(off[i - 1u] + 1u);
+    }
+  }
+  return n;
+}
+
+/* Called once per record, right after it programs: fire any change planned at
+   this record index. A refusal (e.g. a manual B2 press consumed the slots)
+   just skips -- the schedule never retries, so its ATTEMPTS stay a pure
+   function of (seed, op_count) even when reality interferes. */
+static void ex_tick(uint32_t rec_index)
+{
+  uint8_t off[3], press[3];
+  const uint32_t n = ex_plan(rec_index / NV_RECORDS_PER_PAGE, off, press);
+  const uint32_t r = rec_index % NV_RECORDS_PER_PAGE;
+
+  for (uint32_t i = 0u; i < n; i++)
+  {
+    if ((uint32_t)off[i] == r)
+    {
+      (void)settings_toggle((press[i] != 0u) ? 1 : 0);
+    }
+  }
+}
+#endif /* NV_SETTINGS_EXERCISE */
+
 /* ===== ring maintenance ===== */
 
 static int header_valid(const NvHeader *h)
@@ -225,13 +367,21 @@ static int page_blank(uint32_t base)
   return 1;
 }
 
-/* Erase (unless known blank) + stamp the other page's header from RAM state,
-   making it the current page. Returns 0 on success. */
+/* Erase (unless known blank) + stamp the other page from RAM state, making it
+   the current page. Program order is the crash-safety design: J0 (the current
+   settings) FIRST, then the header body, and the header's validity doubleword
+   (version/reserved0/page_seq -- the bytes that make this page "count as
+   existing") LAST OF ALL. A reset anywhere mid-open leaves a header that
+   header_valid() rejects, so Init wipes the fragment -- never a valid-looking
+   page with a missing J0 or garbage counters. (The old ascending order
+   programmed the validity fields first: a real crash window, now closed.)
+   Returns 0 on success. */
 static int page_open_next(void)
 {
   const uint32_t target = (s_page_base == NV_PAGE0_BASE) ? NV_PAGE1_BASE : NV_PAGE0_BASE;
   const uint32_t idx = (target == NV_PAGE0_BASE) ? 0u : 1u;
   union { NvHeader h; uint64_t dw[NV_HEADER_SIZE / 8u]; } u;
+  union { NvJournalEntry e; uint64_t dw; } j0;
   int err = 0;
 
   memset(&u, NV_HEADER_PAD_FILL, sizeof(u));
@@ -250,19 +400,30 @@ static int page_open_next(void)
   u.h.press_max  = (uint32_t)s_stats[2].max;
   u.h.press_mean = (uint32_t)stats_mean(&s_stats[2]);
 
+  /* J0 carries the settings live at page-open; its op_count equals the
+     header's by definition (both mean "records before this page"). */
+  memset(&j0, 0, sizeof(j0));
+  j0.e.unit_temp  = s_unit_temp;
+  j0.e.unit_press = s_unit_press;
+  j0.e.reserved0  = 0u;
+  j0.e.op_count   = s_op_count;
+
   Nv_Unlock();
   if (s_known_blank[idx] == 0u) { err = Nv_ErasePage(target); }
   s_known_blank[idx] = 0u;
-  for (uint32_t i = 0u; (i < NV_HEADER_SIZE / 8u) && (err == 0); i++)
+  if (err == 0) { err = Nv_ProgramDW(target + NV_JOURNAL_OFFSET, j0.dw); }
+  for (uint32_t i = 1u; (i < NV_HEADER_SIZE / 8u) && (err == 0); i++)
   {
     err = Nv_ProgramDW(target + 8u * i, u.dw[i]);
   }
+  if (err == 0) { err = Nv_ProgramDW(target, u.dw[0]); }   /* validity word LAST */
   Nv_Lock();
   if (err != 0) { return -1; }
 
   s_page_base = target;
   s_page_seq += 1u;
   s_slot = 0u;
+  s_journal_used = 1u;   /* J0 stamped; the 3 change slots are free again */
   return 0;
 }
 
@@ -274,7 +435,14 @@ void NvLogger_Init(void)
   const NvHeader *h1 = (const NvHeader *)NV_PAGE1_BASE;
   int v0 = header_valid(h0);
   int v1 = header_valid(h1);
-  char msg[112];
+  char msg[128];
+
+  /* Settings start at the defaults; only a valid journal chain end below may
+     override them. Garbage or virgin flash keeps the defaults -- the IDS, not
+     the boot path, raises any alarm. */
+  s_unit_temp    = NV_UNIT_TEMP_C;
+  s_unit_press   = NV_UNIT_PRESS_HPA;
+  s_journal_used = 0u;
 
   /* Equal sequence numbers can't be written by this logger -- treat as corrupt. */
   if (v0 && v1 && (h0->page_seq == h1->page_seq)) { v0 = 0; v1 = 0; }
@@ -310,12 +478,36 @@ void NvLogger_Init(void)
     /* The write head is FOUND, not stored: first all-0xFF slot of the newest page. */
     while (s_slot < NV_RECORDS_PER_PAGE)
     {
-      const uint64_t *dw = (const uint64_t *)(s_page_base + NV_HEADER_SIZE
+      const uint64_t *dw = (const uint64_t *)(s_page_base + NV_RECORDS_OFFSET
                                               + s_slot * NV_RECORD_SIZE);
       if ((dw[0] == NV_ERASED_DW) && (dw[1] == NV_ERASED_DW)) { break; }
       s_slot++;
     }
     s_op_count = cur->op_count + s_slot;
+
+    /* The live settings are the END of the contiguous journal chain, found the
+       same way as the head: walk J0->J3, stop at the first blank slot. A
+       written slot past a blank gap is benignly impossible and never adopted;
+       a garbage chain end (reserved0 != 0 or a unit outside {0,1}) keeps the
+       defaults -- in both cases the foreign ink is the IDS's to flag, and the
+       write path below still targets the first blank slot either way. */
+    {
+      const NvJournalEntry *jrn = (const NvJournalEntry *)(s_page_base + NV_JOURNAL_OFFSET);
+      const uint64_t *jdw = (const uint64_t *)(s_page_base + NV_JOURNAL_OFFSET);
+      while (s_journal_used < NV_JOURNAL_SLOTS && jdw[s_journal_used] != NV_ERASED_DW)
+      {
+        s_journal_used++;
+      }
+      if (s_journal_used > 0u)
+      {
+        const NvJournalEntry *live = &jrn[s_journal_used - 1u];
+        if ((live->reserved0 == 0u) && (live->unit_temp <= 1u) && (live->unit_press <= 1u))
+        {
+          s_unit_temp  = live->unit_temp;
+          s_unit_press = live->unit_press;
+        }
+      }
+    }
 
     /* A non-current page that is neither valid ring data nor blank is foreign --
        wipe it now so it can't pollute benign dumps. */
@@ -365,10 +557,23 @@ void NvLogger_Init(void)
   s_last_ms  = HAL_GetTick();
   s_ms_last  = s_last_ms;   /* seed the 64-bit uptime wrap detector (see Poll) */
 
-  snprintf(msg, sizeof(msg), "[NVLOG] init: seq=%lu boot=%lu op=%lu slot=%lu/%u period=%us\r\n",
+  snprintf(msg, sizeof(msg),
+           "[NVLOG] init: seq=%lu boot=%lu op=%lu slot=%lu/%u jrnl=%lu/%u units=%s,%s period=%us\r\n",
            (unsigned long)s_page_seq, (unsigned long)s_boot_count, (unsigned long)s_op_count,
-           (unsigned long)s_slot, (unsigned)NV_RECORDS_PER_PAGE, (unsigned)NV_LOGGER_PERIOD_S);
+           (unsigned long)s_slot, (unsigned)NV_RECORDS_PER_PAGE,
+           (unsigned long)s_journal_used, (unsigned)NV_JOURNAL_SLOTS,
+           (s_unit_temp == NV_UNIT_TEMP_F) ? "F" : "C",
+           (s_unit_press == NV_UNIT_PRESS_INHG) ? "inHg" : "hPa",
+           (unsigned)NV_LOGGER_PERIOD_S);
   SECURE_print_Log(msg);
+
+#if NV_SETTINGS_EXERCISE
+  /* Every capture's console log self-documents the active schedule. */
+  snprintf(msg, sizeof(msg),
+           "[NVLOG] settings-exercise ON: seed=0x%08lX changes-per-page 0/1/2/3 = 184/56/10/6 of 256\r\n",
+           (unsigned long)NV_EXERCISE_SEED);
+  SECURE_print_Log(msg);
+#endif
 }
 
 int NvLogger_Poll(NvReading *out)
@@ -410,7 +615,7 @@ int NvLogger_Poll(NvReading *out)
   Nv_Unlock();
   for (uint32_t i = 0u; (i < NV_RECORD_SIZE / 8u) && (err == 0); i++)
   {
-    err = Nv_ProgramDW(s_page_base + NV_HEADER_SIZE + s_slot * NV_RECORD_SIZE + 8u * i,
+    err = Nv_ProgramDW(s_page_base + NV_RECORDS_OFFSET + s_slot * NV_RECORD_SIZE + 8u * i,
                        u.dw[i]);
   }
   Nv_Lock();
@@ -419,6 +624,13 @@ int NvLogger_Poll(NvReading *out)
   s_slot++;
   s_op_count++;
 
+#if NV_SETTINGS_EXERCISE
+  /* After the record is on flash, so a change fired here stamps an op_count
+     that already includes it (exactly what a button press between records
+     would stamp). */
+  ex_tick(s_op_count - 1u);
+#endif
+
   out->ts    = u.r.ts;
   out->temp  = u.r.temp;
   out->hum   = u.r.hum;
@@ -426,5 +638,16 @@ int NvLogger_Poll(NvReading *out)
   out->op    = s_op_count;
   return 1;
 }
+
+NvSettings NvLogger_Settings(void)
+{
+  NvSettings s;
+  s.unit_temp  = s_unit_temp;
+  s.unit_press = s_unit_press;
+  return s;
+}
+
+int NvLogger_ToggleTempUnit(void)  { return settings_toggle(0); }
+int NvLogger_TogglePressUnit(void) { return settings_toggle(1); }
 
 #endif /* NV_LOGGER */

@@ -2,16 +2,19 @@
 //
 // Pipeline:  STM32 (USART3) --UART--> ESP32 (this) --Wi-Fi/TCP--> ncat (laptop).
 //
-// The STM32 sends ONE 23-byte telemetry frame per logged sensor record (once per record
+// The STM32 sends ONE 24-byte telemetry frame per logged sensor record (once per record
 // period: 1 s dev / 45 s deploy) over the mikroBUS UART -- the SAME reading its NV logger
-// just wrote to flash (one source, two sinks). We accumulate UART bytes, find the
-// 0xA5 0x5A magic, validate the XOR checksum, decode, and forward a human-readable line
-// to the laptop listener (tools/listen.py, or ncat).
+// just wrote to flash (one source, two sinks), CONVERTED to the user's display units
+// (flash keeps canonical degC/hPa; the frame says what the user asked for, and the units
+// byte says which that is). We accumulate UART bytes, find the 0xA5 0x5A magic, validate
+// the XOR checksum, decode, and forward a human-readable line to the laptop listener
+// (tools/listen.py, or ncat).
 //
-//   Frame (23 bytes): [0]=0xA5 [1]=0x5A [2..5]=seq u32 (lifetime record count)
-//                     [6..9]=ts u32 (s since boot)  [10..13]=temp i32 (degC x100)
-//                     [14..17]=hum u32 (%RH x100)   [18..21]=press u32 (hPa x100)
-//                     [22]=XOR of bytes 0..21 -- all little-endian
+//   Frame (24 bytes): [0]=0xA5 [1]=0x5A [2..5]=seq u32 (lifetime record count)
+//                     [6..9]=ts u32 (s since boot)  [10..13]=temp i32 (x100, unit per [22])
+//                     [14..17]=hum u32 (%RH x100)   [18..21]=press u32 (x100, unit per [22])
+//                     [22]=units (bit0: 0=degC 1=degF; bit1: 0=hPa 1=inHg)
+//                     [23]=XOR of bytes 0..22 -- all little-endian
 //
 // Magic = frame-sync sentinel ("is a real frame starting here, am I aligned?").
 // Checksum = content integrity ("did the bytes arrive uncorrupted?"). We scan the RX
@@ -40,7 +43,9 @@ static const int HS_OUT_PIN = 21;
 // ---- Telemetry frame layout (must match the STM32 Tele_BuildFrame contract) ----
 static const uint8_t  TELE_MAGIC0  = 0xA5;
 static const uint8_t  TELE_MAGIC1  = 0x5A;
-static const size_t   TELE_FRAME_LEN = 23;
+static const size_t   TELE_FRAME_LEN = 24;
+static const uint8_t  TELE_UNITS_TEMP_F     = 0x01;  // units byte, bit0: temp in degF
+static const uint8_t  TELE_UNITS_PRESS_INHG = 0x02;  // units byte, bit1: press in inHg
 
 // ---- Networking ----
 static WiFiClient client;
@@ -105,7 +110,7 @@ static int findValidFrame(const uint8_t* buf, size_t n) {
 }
 
 // ---- UART RX from the STM32 (USART3 over the mikroBUS UART) + Wi-Fi/TCP relay. The STM32
-// sends one 23-byte frame per record period (see the file header); we accumulate UART bytes,
+// sends one 24-byte frame per record period (see the file header); we accumulate UART bytes,
 // scan for the 0xA5 0x5A magic + XOR checksum (findValidFrame), decode, print, and forward
 // to ncat. ----
 static const int PIN_UART_RX = 23;     // g23 <- mikroBUS TX pad (STM32 PC10 / USART3_TX)
@@ -187,28 +192,32 @@ void loop() {
     return;
   }
 
-  // Decode the validated payload (little-endian, matching the STM32 builder).
+  // Decode the validated payload (little-endian, matching the STM32 builder). temp/press
+  // arrive already converted to the display units the units byte names.
   const uint8_t* f = &acc[idx];
   const uint32_t seq   = rdU32(&f[2]);
   const uint32_t ts    = rdU32(&f[6]);
-  const int32_t  temp  = (int32_t)rdU32(&f[10]);  // degC x100
-  const uint32_t hum   = rdU32(&f[14]);           // %RH  x100
-  const uint32_t press = rdU32(&f[18]);           // hPa  x100
+  const int32_t  temp  = (int32_t)rdU32(&f[10]);  // x100, degC or degF per units
+  const uint32_t hum   = rdU32(&f[14]);           // %RH x100 (no unit setting)
+  const uint32_t press = rdU32(&f[18]);           // x100, hPa or inHg per units
+  const uint8_t  units = f[22];
+  const char* tUnit = (units & TELE_UNITS_TEMP_F)     ? "F"    : "C";
+  const char* pUnit = (units & TELE_UNITS_PRESS_INHG) ? "inHg" : "hPa";
   frames_ok++;
 
-  Serial.printf("UART ok: seq=%lu ts=%lu T=%.2fC RH=%.2f%% P=%.2fhPa (off=%d) [ok=%lu bad=%lu]\n",
+  Serial.printf("UART ok: seq=%lu ts=%lu T=%.2f%s RH=%.2f%% P=%.2f%s (off=%d) [ok=%lu bad=%lu]\n",
                 (unsigned long)seq, (unsigned long)ts,
-                temp / 100.0, hum / 100.0, press / 100.0, idx,
+                temp / 100.0, tUnit, hum / 100.0, press / 100.0, pUnit, idx,
                 (unsigned long)frames_ok, (unsigned long)frames_bad);
 
-  // Forward a decoded, human-readable line to ncat -- verifiable by eye against both the
-  // STM32 console line and, after a flash dump, the NV record bytes themselves. (Display
-  // floats only; the wire and the flash stay fixed-point integer.)
+  // Forward a decoded, human-readable line to ncat -- verifiable by eye against the STM32
+  // console line (same values, same units). (Display floats only; the wire stays
+  // fixed-point integer, and the flash record stays canonical degC/hPa regardless.)
   if (client.connected()) {
     char line[96];
-    const int n = snprintf(line, sizeof(line), "seq=%lu ts=%lu T=%.2f RH=%.2f P=%.2f\n",
+    const int n = snprintf(line, sizeof(line), "seq=%lu ts=%lu T=%.2f%s RH=%.2f P=%.2f%s\n",
                            (unsigned long)seq, (unsigned long)ts,
-                           temp / 100.0, hum / 100.0, press / 100.0);
+                           temp / 100.0, tUnit, hum / 100.0, press / 100.0, pUnit);
     client.write(reinterpret_cast<const uint8_t*>(line), (size_t)n);
   }
 
