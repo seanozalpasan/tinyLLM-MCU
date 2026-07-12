@@ -113,7 +113,7 @@ BLANK_HEADER = bytes([ERASED_BYTE]) * HEADER_SIZE   # a never-opened page starts
 # bytes stay MONITORED blank space. op_count = lifetime records written when the
 # entry was stamped: it binds each change to a spot in the record stream, and it
 # is non-decreasing along the chain (equal is benign -- two presses can land
-# inside one 45 s record period).
+# inside one record period).
 
 JOURNAL_OFFSET = HEADER_SIZE
 JOURNAL_SLOTS = 4
@@ -148,11 +148,13 @@ BLANK_RECORD = bytes([ERASED_BYTE]) * RECORD_SIZE   # an unwritten slot reads as
 # ---- update-rate presets (period between records, seconds) -----------------------
 # The rate is an operating knob, not layout: flash ages by ERASE COUNT (pages are
 # rated ~10k cycles minimum; each page erases once per RECORDS_TOTAL records). At
-# 1 s the ring wraps in ~4 min -- bring-up only, never training data. At 45 s each
-# page erases every ~3 h => ~3.5 years to the rated minimum, and a fully fresh
-# benign snapshot exists every ring turnover (~3 h) -- the balance between a
-# credible device lifetime and dataset accumulation speed. The model trains at
-# the deploy rate only (train == infer distribution).
+# 1 s the ring wraps in ~4 min -- bring-up only, never training data. At 15 s each
+# page erases every ~61 min => ~14 months to the rated minimum, and a fully fresh
+# benign snapshot exists every ring turnover (~61 min) -- the deliberate trade of
+# device-lifetime headroom for dataset accumulation speed (a ~115-capture campaign
+# fits in ~3 days instead of ~2 weeks at the same snapshot-overlap ratio). The
+# model trains at the deploy rate only (train == infer distribution), so the demo
+# runtime uses this same rate.
 
 RATE_DEV_PERIOD_S = 1
-RATE_DEPLOY_PERIOD_S = 45
+RATE_DEPLOY_PERIOD_S = 15

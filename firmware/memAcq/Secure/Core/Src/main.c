@@ -74,6 +74,15 @@
 #define OCTAL_RESET_MEMORY_CMD      0x9966
 #define MEMORY_RESET_MAX_DELAY      100   /* ms; reset recovery worst case (reset during erase) */
 
+/* 1 = bring up OCTOSPI1 + memory-mapped XIP at boot ([S ] OSPI console lines).
+   0 = skip external flash entirely: the ML route's model lives in internal
+   flash and never touches OSPI, so the workload build stays quiet and boots
+   faster (and skips the self-test's per-boot sector erase). The proven
+   bring-up code below stays compiled-out, ready for the parked LLM route.
+   GOTCHA: NonSecure main.c's read-back check (OSPI_XIP_CHECK) MUST be 0
+   whenever this is 0 -- a non-secure read of unmapped 0x90000000 faults. */
+#define OSPI_XIP_BRINGUP   0
+
 /* 1 = destructive erase/program/verify self-test at boot.  0 = init + memory-mapped READ only.
    GOTCHA: flip to 0 once real weights live in OSPI flash, or every boot erases them. */
 #define OSPI_XIP_SELFTEST  1
@@ -111,6 +120,7 @@ const uint32_t aSRC_SEC_ROM_Buffer[BUFFER_SIZE] =
 //this is the buffer that non-secure will copy to; it holds 1024 bytes (256 words) of memory
 uint32_t SEC_Mem_Buffer[BUFFER_SIZE];
 
+#if OSPI_XIP_BRINGUP
 OSPI_HandleTypeDef hospi1;
 #if OSPI_XIP_SELFTEST
 /* Known pattern programmed into external flash, then verified from both worlds. */
@@ -119,6 +129,7 @@ static const uint32_t OSPI_Test_Pattern[4] =
   0xDEADBEEFUL, 0xCAFEBABEUL, 0x12345678UL, 0xA5A5A5A5UL
 };
 #endif
+#endif /* OSPI_XIP_BRINGUP */
 
 /* USER CODE END PV */
 
@@ -131,6 +142,7 @@ static void MX_ICACHE_Init(void);
 static void MX_GTZC_S_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
+#if OSPI_XIP_BRINGUP
 /* OSPI XIP. Reusable bring-up (OSPI_Init + OSPI_EnableMemoryMapped) is kept separate
    from the destructive self-test so the latter compiles out (OSPI_XIP_SELFTEST 0). */
 static void MX_OCTOSPI1_Init(void);
@@ -146,6 +158,7 @@ static void OSPI_EnableMemoryMapped(int with_write);
 #if OSPI_XIP_SELFTEST
 static void OSPI_XIP_SelfTest(void);
 #endif
+#endif /* OSPI_XIP_BRINGUP */
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -202,6 +215,7 @@ int main(void)
      never see a press. GPIOC's clock is already on (MX_GPIO_Init). */
   HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_13, GPIO_PIN_NSEC);
 
+#if OSPI_XIP_BRINGUP
   /* Bring up OSPI XIP at 0x90000000. Must run before HAL_SuspendTick() (it uses HAL_Delay).
      Leaves OCTOSPI1 in memory-mapped mode so the non-secure world can read it after the jump. */
   printf("\r\n[S ] OSPI XIP: bringing up OCTOSPI1 (init + flash reset + octal mode)...\r\n");
@@ -212,6 +226,7 @@ int main(void)
   OSPI_EnableMemoryMapped(0);   /* production: read-only XIP, no erase/program */
 #endif
   printf("[S ] OCTOSPI1 in memory-mapped mode @0x90000000.\r\n");
+#endif /* OSPI_XIP_BRINGUP */
 
   /* DMA1 Channel3: Select Callbacks functions called after Transfer complete and Transfer error */
     HAL_DMA_RegisterCallback(&hdma_memtomem_dma1_channel3, HAL_DMA_XFER_CPLT_CB_ID, NonSecureToSecureTransferComplete);
@@ -630,11 +645,13 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_ConfigPinAttributes(GPIOF, GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_NSEC); /* PF11/PF12 STMod+ mux select */
   HAL_GPIO_ConfigPinAttributes(GPIOG, GPIO_PIN_9,  GPIO_PIN_NSEC);   /* PG9  vestigial SPI SCK (unused) */
   HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_10|GPIO_PIN_11, GPIO_PIN_NSEC); /* PC10 USART3_TX, PC11 USART3_RX (mikroBUS UART) */
+  HAL_GPIO_ConfigPinAttributes(GPIOB, GPIO_PIN_6|GPIO_PIN_7,   GPIO_PIN_NSEC); /* PB6 I2C1_SCL, PB7 I2C1_SDA (BME280 sensor)    */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
 
+#if OSPI_XIP_BRINGUP
 /* ===== OSPI XIP: OCTOSPI1 bring-up + erase/program/read at 0x90000000 =====
    Hand-ported from the ST OSPI_NOR_MemoryMapped example (Cube_FW_L5 V1.5.0).
    All polling/blocking (no OCTOSPI IRQ) so stm32l5xx_it.c stays untouched.
@@ -1120,6 +1137,7 @@ static void OSPI_XIP_SelfTest(void)
          ok ? "PASS" : "FAIL");
 }
 #endif /* OSPI_XIP_SELFTEST */
+#endif /* OSPI_XIP_BRINGUP */
 /* ===================== end OSPI XIP ==================== */
 
 /* USER CODE BEGIN 4 */

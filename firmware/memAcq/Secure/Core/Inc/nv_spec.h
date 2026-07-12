@@ -69,10 +69,11 @@
 
 /* ===== update-rate presets (period between records, seconds) ===== */
 /* Flash ages by erase count (~10k cycles/page rated): 1 s wraps the ring in
-   ~4 min for bring-up only; 45 s erases each page every ~3 h
-   => ~3.5 years to the rated minimum. Training data = deploy rate only. */
+   ~4 min for bring-up only; 15 s erases each page every ~61 min
+   => ~14 months to the rated minimum (deliberately traded down from 45 s
+   for campaign speed). Training data = deploy rate only. */
 #define NV_RATE_DEV_PERIOD_S        1U
-#define NV_RATE_DEPLOY_PERIOD_S     45U
+#define NV_RATE_DEPLOY_PERIOD_S     15U
 
 /* Programmed once per page-open; counters + stats are RAM-kept and snapshotted
    at that moment (flash cannot rewrite in place). page_seq: monotonic page-open

@@ -27,7 +27,7 @@ PAGE1_RECORDS = 60
 PAGE1_CHANGE_AT = 20   # records into page1 when the change landed
 
 TS_FIRST = 1000     # seconds since boot at the oldest record
-TS_STEP = 45        # == the deploy-rate record period
+TS_STEP = 15        # == the deploy-rate record period
 
 # Triangle-wave value generators (mid, amplitude, period-in-records); hum is
 # anti-correlated with temp, mirroring the firmware's dummy generator shape.

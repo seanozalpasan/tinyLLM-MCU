@@ -263,7 +263,7 @@ def test_settings_state_detects_change_entries() -> None:
 
 
 def test_benign_structure_accepts_equal_op_counts() -> None:
-    # The FP-trap regression: two presses inside one 45 s record period stamp
+    # The FP-trap regression: two presses inside one record period stamp
     # EQUAL op_counts -- benign, so the gate must accept it ("strictly
     # increasing" was the audit-caught wrong rule).
     ok = [make_journal_entry(op_count=0),

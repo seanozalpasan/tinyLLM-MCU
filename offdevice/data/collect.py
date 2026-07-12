@@ -14,9 +14,9 @@ capture necessarily reboots the board -- the resulting timestamp restart in the
 ring is benign by spec and belongs in the training data (real devices reboot).
 
 Run (repo root; needs only pyserial + STM32CubeProgrammer installed):
-    python -m offdevice.data.collect nv45s-lab-w1 --interval 2.0
-    python -m offdevice.data.collect nv45s-lab-w1 --fresh --interval 2.0
-    python -m offdevice.data.collect nv45s-smoke --interval 0.05 --count 3
+    python -m offdevice.data.collect nv15s-lab-steady1 --interval 0.667
+    python -m offdevice.data.collect nv15s-lab-fill1 --fresh --interval 0.15 --count 9
+    python -m offdevice.data.collect nv15s-smoke --interval 0.05 --count 3
 
 --fresh erases the two NV pages first (a virgin ring; the following captures walk
 the fill states as it refills), bracketing the erase with resets so the erase never
@@ -177,13 +177,19 @@ def run(cli: Path, port_name: str, baud: int, variant: str, captures_dir: Path,
                    f"count={'unbounded' if count is None else count} fresh={fresh}")
     if fresh:
         # Reset BEFORE erasing: a freshly booted logger leaves the NV pages (and
-        # the FLASH_NS control registers) untouched for its first ~45 s, so the
-        # erase runs against a quiet target. Erasing under a RUNNING logger races
-        # its 45 s tick -- a record programmed into the just-erased (headerless)
-        # page makes capture 1 parse as FOREIGN and poisons the campaign. Reset
-        # AGAIN after the erase so the logger re-inits on the blank ring at once;
-        # without it, a delayed first cycle (e.g. one 60 s retry) would leave the
-        # pre-erase RAM head live past its 45 s tick and reopen the same race.
+        # the FLASH_NS control registers) untouched until its first record tick,
+        # so the erase runs against a quiet target. Erasing under a RUNNING
+        # logger races that tick -- a record programmed into the just-erased
+        # (headerless) page makes capture 1 parse as FOREIGN and poisons the
+        # campaign. Reset AGAIN after the erase so the logger re-inits on the
+        # blank ring at once; without it, a delayed first cycle (e.g. one 60 s
+        # retry) would leave the pre-erase RAM head live past its tick and
+        # reopen the same race. GOTCHA: the quiet window is ONE record period
+        # after reset (~15 s at the deploy rate, down from the 45 s this
+        # sequence was designed under) -- the reset->erase->reset bracket
+        # normally finishes in well under that, but a slow CLI retry can lose
+        # the race, so ALWAYS parse capture 1 of a --fresh chain before
+        # walking away (a FOREIGN parse means re-run the chain).
         try:
             _run_cli(cli, RESET_ARGS)
             _run_cli(cli, ERASE_ARGS)
@@ -226,9 +232,10 @@ def run(cli: Path, port_name: str, baud: int, variant: str, captures_dir: Path,
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Unattended benign-capture loop: reset the board, capture, sleep, repeat.")
-    ap.add_argument("variant", help="campaign tag for filenames + manifest, e.g. nv45s-lab-w1")
+    ap.add_argument("variant", help="campaign tag for filenames + manifest, e.g. nv15s-lab-steady1")
     ap.add_argument("--interval", type=float, default=2.0,
-                    help="hours between captures (default 2.0; ring turnover at 45 s is ~3 h)")
+                    help="hours between captures (default 2.0; ring turnover at the 15 s "
+                         "deploy rate is ~61 min, so the default is ~2 full turnovers)")
     ap.add_argument("--count", type=int, default=None,
                     help="stop after N captures (default: run until Ctrl+C)")
     ap.add_argument("--fresh", action="store_true",

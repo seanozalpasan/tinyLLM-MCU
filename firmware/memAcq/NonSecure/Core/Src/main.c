@@ -24,8 +24,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
-#include <stdio.h>   /* snprintf for the OSPI XIP report */
+#include <stdio.h>   /* snprintf for console report lines */
 #include "nv_logger.h"   /* the NV-region sensor logger (writes the nv_spec.h layout) */
+#include "bme280.h"      /* the real sensor: I2C1 PB6/PB7, forced-mode reads */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,6 +36,12 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+/* 1 = read back the OSPI XIP test pattern at 0x90000000 at boot. Flips
+   TOGETHER with OSPI_XIP_BRINGUP in Secure main.c: with the Secure bring-up
+   off, this region is not memory-mapped and a non-secure read of it faults.
+   Kept for the parked LLM route; the ML workload never touches external flash. */
+#define OSPI_XIP_CHECK  0
 
 /* ---- Test-bed A: outbound telemetry frame (STM32 -> ESP32 over USART3) ----
    Carries the SAME reading the logger just wrote to NV (one source, two sinks),
@@ -152,6 +159,7 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 
+#if OSPI_XIP_CHECK
   /* ---- Non-secure read-back of the OSPI XIP region ----
      The secure world already programmed the pattern, left OCTOSPI1 memory-mapped, and
      dropped a non-secure watermark over 0x90000000. This proves the path the inference
@@ -175,6 +183,7 @@ int main(void)
              ospi_ok ? "PASS" : "FAIL");
     SECURE_print_Log(ospi_msg);
   }
+#endif /* OSPI_XIP_CHECK */
 
 #if 0  /* Full memory-acquisition dump (NS flash -> secure via DMA veneers). Disabled for
           now to keep the OSPI XIP boot output readable; flip to #if 1 to re-enable. */
@@ -271,6 +280,19 @@ int main(void)
   }
   Uart3_Init();
   SECURE_print_Log("[NS] Test-bed A: USART3 telemetry init (PC10 TX -> mikroBUS UART)\r\n");
+
+  /* The real sensor, initialized exactly once. A failure is loud but
+     non-fatal: the logger then skips every record (nothing lands on flash)
+     instead of writing garbage, and everything else keeps running. */
+  if (BME280_Init() != 0)
+  {
+    SECURE_print_Log("[NS] BME280 unavailable: records will be skipped until reboot\r\n");
+  }
+#if BME280_SELFTEST
+  /* Compensation parity surface: calibration bytes + trim words +
+     raw/compensated vectors, printed for bme280_ref.py to check. */
+  BME280_SelfTest();
+#endif
 
 #if NV_LOGGER
   /* The benign workload: recover (or clean-start) the NV ring + the display

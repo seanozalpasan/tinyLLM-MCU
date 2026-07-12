@@ -1,0 +1,33 @@
+[HASH] static region OK: sha256=b8f1e06ce8c2b4065cd9136b53db91fdfad6d6c01c9e536732fc0ca93a6b90cd
+
+[S ] OSPI XIP: bringing up OCTOSPI1 (init + flash reset + octal mode)...
+[S ] sector erase complete.
+[S ] read @0x90000000: 0xDEADBEEF 0xCAFEBABE 0x12345678 0xA5A5A5A5 -> PASS
+[S ] OCTOSPI1 in memory-mapped mode @0x90000000.
+[S ] capture window: send 'D' within 2000 ms for one NS-flash dump.
+[NS] read @0x90000000: 0xDEADBEEF 0xCAFEBABE 0x12345678 0xA5A5A5A5 -> PASS
+[NS] Test-bed A: USART3 telemetry init (PC10 TX -> mikroBUS UART)
+[BME] selftest: begin
+[BME] id=0x60 at addr=0x76
+[BME] calibA EE6C846732006E9537D6D00B06272AFFF9FFB42DE8D18813004B
+[BME] calibB 7A0100112B031E
+[BME] trimT T1=27886 T2=26500 T3=50
+[BME] trimP P1=38254 P2=-10697 P3=3024 P4=9990 P5=-214 P6=-7 P7=11700 P8=-11800 P9=5000
+[BME] trimH H1=75 H2=378 H3=0 H4=283 H5=50 H6=30
+[BME] vec1 raw ut=519168 up=263344 uh=27506
+[BME] vec1 cmp tfine=118074 T=2306 P=26058054 H=55315
+[BME] vec1 rec temp=2306 hum=5402 press=101789
+[BME] vec2 raw ut=519136 up=263344 uh=27471
+[BME] vec2 cmp tfine=118022 T=2305 P=26057599 H=55111
+[BME] vec2 rec temp=2305 hum=5382 press=101787
+[BME] vec3 raw ut=519104 up=263328 uh=27480
+[BME] vec3 cmp tfine=117971 T=2304 P=26057825 H=55158
+[BME] vec3 rec temp=2304 hum=5387 press=101788
+[BME] vec4 raw ut=519136 up=263328 uh=27518
+[BME] vec4 cmp tfine=118022 T=2305 P=26058271 H=55384
+[BME] vec4 rec temp=2305 hum=5409 press=101790
+[BME] vec5 raw ut=519136 up=263312 uh=27466
+[BME] vec5 cmp tfine=118022 T=2305 P=26058943 H=55076
+[BME] vec5 rec temp=2305 hum=5379 press=101793
+[BME] selftest: done
+[NVLOG] init: seq=15 boot=4 op=1779 slot=71/122 jrnl=1/4 units=F,inHg period=45s

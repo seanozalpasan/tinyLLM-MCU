@@ -1,14 +1,18 @@
 /*
- * nv_logger.c -- NV-region dummy sensor logger (NonSecure benign workload).
+ * nv_logger.c -- NV-region sensor logger (NonSecure benign workload).
  *
  * Evolved from the ns-flash_static_proof append-log demo: the same
  * direct-register NS-flash doubleword programming, now writing the structured
  * nv_spec.h layout (per 2 KB page: [NvHeader 64 B][4 x NvJournalEntry 8 B]
  * [122 x NvRecord 16 B]) into pages 126/127. This is the byte surface the
- * one-class ML learns, so realism comes from RULES -- bounded ranges,
- * correlated channels, per-channel refresh periods, monotonic timestamps --
- * never from unpredictable churn: churn widens the benign spread, and
- * detectability = anomaly distance / benign spread.
+ * one-class ML learns. Values come from the BME280 (bme280.c), all three
+ * channels read fresh every record tick -- real physics supplies the bounded
+ * ranges and cross-channel correlations the model learns; the byte LAYOUT
+ * rules (fixed stride, monotonic timestamps, ring discipline) live here.
+ *
+ * A failed sensor read SKIPS its record (nothing is written, the cadence
+ * holds) rather than logging garbage -- an out-of-range record would trip
+ * the training data's benign gate and cost a whole capture.
  *
  * The settings journal persists the display units (B2 presses): page-open
  * stamps J0 from RAM, each runtime change programs the next blank slot, and
@@ -29,41 +33,9 @@
 #include <string.h>
 
 #include "main.h"   /* device headers (FLASH_NS) + the SECURE_print_Log veneer */
+#include "bme280.h" /* the real sensor: BME280_Measure per record tick */
 
 #if NV_LOGGER
-
-/* ===== dummy-signal shape (scaled units, matching nv_spec.h) =====
-   Slow triangle waves + LSB-scale jitter: realistic-looking, strictly bounded,
-   fully rule-governed. Periods count REFRESH events, not seconds, so the byte
-   texture is the same in every rate regime. */
-#define GEN_TEMP_MID     2350    /* 23.50 degC                     */
-#define GEN_TEMP_AMP      150    /* +-1.50 degC per wave           */
-#define GEN_TEMP_PERIOD   240    /* refreshes per wave             */
-#define GEN_TEMP_JIT        2
-
-#define GEN_HUM_MID      4500    /* 45.00 %RH                      */
-#define GEN_HUM_AMP       300
-#define GEN_HUM_PERIOD    360
-#define GEN_HUM_JIT         3
-#define GEN_HUM_K           2    /* anti-correlation vs temp (see gen_tick) */
-
-#define GEN_PRESS_MID  101325    /* 1013.25 hPa                    */
-#define GEN_PRESS_AMP     200    /* +-2.00 hPa                     */
-#define GEN_PRESS_PERIOD  480
-#define GEN_PRESS_JIT       2
-
-/* tri_wave needs an even period (period/2 is the exact apex) that is >= 2
-   (period 1 would divide by zero). Locked at compile time, editor-safe the same
-   way nv_spec.h's NV_LAYOUT_LOCK is (CubeIDE's indexer chokes on a bare
-   _Static_assert; GCC accepts either branch). */
-#ifdef __CDT_PARSER__
-#define GEN_PERIOD_LOCK(tag, p)  typedef char gen_period_lock_##tag[((p) >= 2 && (p) % 2 == 0) ? 1 : -1]
-#else
-#define GEN_PERIOD_LOCK(tag, p)  _Static_assert((p) >= 2 && (p) % 2 == 0, "tri_wave period must be even and >= 2: " #tag)
-#endif
-GEN_PERIOD_LOCK(temp,  GEN_TEMP_PERIOD);
-GEN_PERIOD_LOCK(hum,   GEN_HUM_PERIOD);
-GEN_PERIOD_LOCK(press, GEN_PRESS_PERIOD);
 
 /* ===== NS-flash program/erase primitives (from the static-proof demo) ===== */
 
@@ -137,60 +109,42 @@ static uint32_t  s_op_count;       /* records fully programmed, lifetime        
 static uint32_t  s_last_ms;        /* HAL tick of the last record               */
 static uint32_t  s_ms_hi;          /* upper word of the 64-bit uptime in ms     */
 static uint32_t  s_ms_last;        /* last raw HAL tick seen (wrap detector)    */
-static uint32_t  s_tick;           /* lifetime record ticks (refresh cadence)   */
 static uint8_t   s_known_blank[NV_NUM_PAGES];  /* page verified/erased blank    */
 static uint8_t   s_fault;          /* a flash op failed: stop, don't corrupt    */
 static ChanStats s_stats[3];       /* temp / hum / press, this boot             */
-static int32_t   s_temp, s_hum, s_press;       /* held channel values           */
-static uint32_t  s_ph_temp, s_ph_hum, s_ph_press;  /* wave phases (refreshes)   */
-static uint32_t  s_lcg = 0x13572468u;          /* jitter PRNG state             */
 
-/* ===== rule-governed dummy readings ===== */
-
-/* Symmetric triangle: phase 0..period-1 -> -amp .. +amp .. -amp. */
-static int32_t tri_wave(uint32_t phase, int32_t period, int32_t amp)
-{
-  const int32_t p = (int32_t)(phase % (uint32_t)period);
-  const int32_t half = period / 2;
-  return (2 * amp * ((p < half) ? p : (period - p))) / half - amp;
-}
-
-/* Bounded pseudo-jitter in [-j, +j]: mimics LSB sensor noise. Deliberately tiny --
-   jitter variance raises the benign noise floor the detector must see over. */
-static int32_t jitter(int32_t j)
-{
-  s_lcg = s_lcg * 1664525u + 1013904223u;
-  return (int32_t)((s_lcg >> 16) % (uint32_t)(2 * j + 1)) - j;
-}
+/* ===== sensor readings (BME280, all channels fresh every tick) ===== */
 
 static int32_t clampi(int32_t v, int32_t lo, int32_t hi)
 {
   return (v < lo) ? lo : ((v > hi) ? hi : v);
 }
 
-/* Advance the generator one record tick. Channels refresh on their own cadence
-   and HOLD in between (three interleaved byte periodicities). */
-static void gen_tick(void)
+/* One fresh reading of all three channels, clamped to the spec ranges.
+   Returns 0 and fills the outputs, or -1 when the record must be SKIPPED:
+   bus fault, measurement timeout, or the Bosch divide-by-zero guard's
+   pressure==0 sentinel -- any of which would otherwise put an out-of-range
+   record on flash and cost the whole capture at the benign gate. A clamp
+   should be impossible (the chip's operating range IS the spec range), so
+   firing one prints a loud note to investigate. */
+static int read_sensor(int32_t *temp, int32_t *hum, int32_t *press)
 {
-  if ((s_tick % NV_LOGGER_TEMP_EVERY) == 0u)
+  BME280_Sample smp;
+
+  if (BME280_Measure(&smp) != 0 || smp.comp_p == 0u)
   {
-    s_temp = clampi(GEN_TEMP_MID + tri_wave(s_ph_temp++, GEN_TEMP_PERIOD, GEN_TEMP_AMP)
-                    + jitter(GEN_TEMP_JIT), NV_TEMP_LO, NV_TEMP_HI);
+    SECURE_print_Log("[NVLOG] sensor read failed; record skipped\r\n");
+    return -1;
   }
-  if ((s_tick % NV_LOGGER_HUM_EVERY) == 0u)
+
+  *temp  = clampi(smp.temp, NV_TEMP_LO, NV_TEMP_HI);
+  *hum   = clampi((int32_t)smp.hum, (int32_t)NV_HUM_LO, (int32_t)NV_HUM_HI);
+  *press = clampi((int32_t)smp.press, (int32_t)NV_PRESS_LO, (int32_t)NV_PRESS_HI);
+  if (*temp != smp.temp || *hum != (int32_t)smp.hum || *press != (int32_t)smp.press)
   {
-    /* Humidity tracks temperature inversely (warmer air, lower relative humidity)
-       plus its own slower wave -- a cross-channel rule a foreign payload breaks. */
-    s_hum = clampi(GEN_HUM_MID - GEN_HUM_K * (s_temp - GEN_TEMP_MID)
-                   + tri_wave(s_ph_hum++, GEN_HUM_PERIOD, GEN_HUM_AMP)
-                   + jitter(GEN_HUM_JIT), (int32_t)NV_HUM_LO, (int32_t)NV_HUM_HI);
+    SECURE_print_Log("[NVLOG] WARNING: reading clamped to spec range -- investigate\r\n");
   }
-  if ((s_tick % NV_LOGGER_PRESS_EVERY) == 0u)
-  {
-    s_press = clampi(GEN_PRESS_MID + tri_wave(s_ph_press++, GEN_PRESS_PERIOD, GEN_PRESS_AMP)
-                     + jitter(GEN_PRESS_JIT), (int32_t)NV_PRESS_LO, (int32_t)NV_PRESS_HI);
-  }
-  s_tick++;
+  return 0;
 }
 
 static void stats_add(ChanStats *s, int32_t v)
@@ -524,36 +478,11 @@ void NvLogger_Init(void)
     }
   }
 
-  /* Stats start fresh each boot (the spec's per-boot rule), but the waves RESUME
-     from the lifetime record count: every dataset capture reboots the board, so
-     a boot-reset phase would clip every wave to its first arc and the training
-     data would systematically miss wave states a long-running deployment visits
-     -- a false-positive trap. Refreshes in ticks 0..op-1 = ceil(op / EVERY).
-     All flash reads above happen before any write this boot, so the stale
-     read-after-write hazard can't bite. */
-  s_tick     = s_op_count;
-  s_ph_temp  = (s_op_count + NV_LOGGER_TEMP_EVERY - 1u) / NV_LOGGER_TEMP_EVERY;
-  s_ph_hum   = (s_op_count + NV_LOGGER_HUM_EVERY - 1u) / NV_LOGGER_HUM_EVERY;
-  s_ph_press = (s_op_count + NV_LOGGER_PRESS_EVERY - 1u) / NV_LOGGER_PRESS_EVERY;
-  s_lcg     ^= s_op_count;   /* jitter stream differs per boot, not a replay */
-
-  /* Prime the held values at the wave point of the last completed refresh
-     (phase-1). GOTCHA: a channel whose cadence isn't due on the first tick
-     would otherwise write its zero-initialized hold -- bit us as press=0
-     (out-of-range) records whenever op_count % 4 != 0 at boot. */
-  s_temp  = clampi(GEN_TEMP_MID
-                   + tri_wave((s_ph_temp > 0u) ? s_ph_temp - 1u : 0u,
-                              GEN_TEMP_PERIOD, GEN_TEMP_AMP)
-                   + jitter(GEN_TEMP_JIT), NV_TEMP_LO, NV_TEMP_HI);
-  s_hum   = clampi(GEN_HUM_MID - GEN_HUM_K * (s_temp - GEN_TEMP_MID)
-                   + tri_wave((s_ph_hum > 0u) ? s_ph_hum - 1u : 0u,
-                              GEN_HUM_PERIOD, GEN_HUM_AMP)
-                   + jitter(GEN_HUM_JIT), (int32_t)NV_HUM_LO, (int32_t)NV_HUM_HI);
-  s_press = clampi(GEN_PRESS_MID
-                   + tri_wave((s_ph_press > 0u) ? s_ph_press - 1u : 0u,
-                              GEN_PRESS_PERIOD, GEN_PRESS_AMP)
-                   + jitter(GEN_PRESS_JIT), (int32_t)NV_PRESS_LO, (int32_t)NV_PRESS_HI);
-
+  /* Stats start fresh each boot (the spec's per-boot rule). No generator state
+     to restore: the sensor is the state, and physics doesn't reset with the
+     board (the old dummy generator's wave-phase resume existed to fake exactly
+     that). All flash reads above happen before any write this boot, so the
+     stale read-after-write hazard can't bite. */
   s_last_ms  = HAL_GetTick();
   s_ms_last  = s_last_ms;   /* seed the 64-bit uptime wrap detector (see Poll) */
 
@@ -580,6 +509,7 @@ int NvLogger_Poll(NvReading *out)
 {
   const uint32_t now = HAL_GetTick();
   union { NvRecord r; uint64_t dw[NV_RECORD_SIZE / 8u]; } u;
+  int32_t temp, hum, press;
   int err = 0;
 
   /* Extend the tick to 64 bits BEFORE any early return: HAL_GetTick() is u32
@@ -596,11 +526,13 @@ int NvLogger_Poll(NvReading *out)
   s_last_ms = now;
 
   /* Order is the spec's: reading -> stats -> (page-open if needed, stamping a
-     header that already includes this reading) -> program the record. */
-  gen_tick();
-  stats_add(&s_stats[0], s_temp);
-  stats_add(&s_stats[1], s_hum);
-  stats_add(&s_stats[2], s_press);
+     header that already includes this reading) -> program the record. A failed
+     read skips the record but keeps the cadence (s_last_ms already advanced):
+     one lost record, not a stalled logger. */
+  if (read_sensor(&temp, &hum, &press) != 0) { return 0; }
+  stats_add(&s_stats[0], temp);
+  stats_add(&s_stats[1], hum);
+  stats_add(&s_stats[2], press);
 
   if ((s_page_base == 0u) || (s_slot >= NV_RECORDS_PER_PAGE))
   {
@@ -608,9 +540,9 @@ int NvLogger_Poll(NvReading *out)
   }
 
   u.r.ts    = (uint32_t)((((uint64_t)s_ms_hi << 32) | now) / 1000u);   /* u32 s since boot, wrap-free */
-  u.r.temp  = s_temp;
-  u.r.hum   = (uint32_t)s_hum;
-  u.r.press = (uint32_t)s_press;
+  u.r.temp  = temp;
+  u.r.hum   = (uint32_t)hum;
+  u.r.press = (uint32_t)press;
 
   Nv_Unlock();
   for (uint32_t i = 0u; (i < NV_RECORD_SIZE / 8u) && (err == 0); i++)

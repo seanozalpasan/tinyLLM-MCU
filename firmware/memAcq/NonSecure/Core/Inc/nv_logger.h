@@ -1,10 +1,11 @@
 /*
- * nv_logger.h -- NV-region dummy sensor logger (NonSecure benign workload).
+ * nv_logger.h -- NV-region sensor logger (NonSecure benign workload).
  *
- * Writes temp/humidity/pressure readings into the 4 KB NV flash region per the
- * generated nv_spec.h layout (the byte surface the one-class ML monitors), and
- * hands each logged reading back to the caller so main.c can telemeter the same
- * values over USART3 -- one data source, two sinks.
+ * Writes BME280 temp/humidity/pressure readings into the 4 KB NV flash region
+ * per the generated nv_spec.h layout (the byte surface the one-class ML
+ * monitors), and hands each logged reading back to the caller so main.c can
+ * telemeter the same values over USART3 -- one data source, two sinks. All
+ * three channels are read fresh from the sensor every record tick.
  */
 #ifndef NV_LOGGER_H
 #define NV_LOGGER_H
@@ -19,17 +20,12 @@
 
 /* Record period: pick a preset from nv_spec.h, or any custom seconds value.
    NV_RATE_DEV_PERIOD_S (1 s) wraps the ring in ~4 min for bring-up only;
-   NV_RATE_DEPLOY_PERIOD_S (45 s) is the ~3.5-year-endurance deployment default.
-   The model trains at the deploy rate only -- the dev preset never produces
-   training data, or the model trains on one distribution and infers on another. */
+   NV_RATE_DEPLOY_PERIOD_S (15 s) is the deployment default (~14 months of
+   flash endurance -- deliberately traded down from 45 s so a full training
+   campaign fits in days; the ring turns over in ~61 min). The model trains at
+   the deploy rate only -- the dev preset never produces training data, or the
+   model trains on one distribution and infers on another. */
 #define NV_LOGGER_PERIOD_S   NV_RATE_DEPLOY_PERIOD_S
-
-/* Per-channel refresh cadence, in records: a channel's value is re-generated
-   every Nth record and HELD in between, giving three interleaved byte
-   periodicities for the spectral features to learn. */
-#define NV_LOGGER_TEMP_EVERY   1u
-#define NV_LOGGER_HUM_EVERY    2u
-#define NV_LOGGER_PRESS_EVERY  4u
 
 /* CAMPAIGN BUILDS ONLY: exercise the display-unit settings on a deterministic
    schedule so the training data carries journal change entries in realistic
@@ -39,7 +35,7 @@
    and any capture's journal can be re-derived exactly afterwards. It plans at
    most 3 changes per page (the free slots after J0), so it can never hit the
    journal-full refusal by itself. The deploy build NEVER sets this. */
-#define NV_SETTINGS_EXERCISE   0
+#define NV_SETTINGS_EXERCISE   1
 /* Seed chosen so a fresh ring exercises the schedule early (page 0: two
    changes; page 3: a full journal) -- bench-verifiable in minutes at the dev
    rate, while the long-run distribution stays ~72/22/4/2 (checked over 100k
