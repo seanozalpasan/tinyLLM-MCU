@@ -9,10 +9,10 @@ makes the rare fill states automatable: the orchestrator parses each capture
 it just took, so it knows the ring's exact position and the capture's exact
 moment. After the first wrap the ring's record total cycles 123..244 once per
 page cycle (122 records x the record period), and the benign manifold is
-steepest and least-sampled in the 238..244 band (~90 s per cycle) -- the chain
-math extrapolates from the newest capture to the next band entry, sleeps until
-then, and captures on a page-cycle-plus-a-bit interval so successive captures
-walk the band and spill into the just-after-rotation state.
+steepest and least-sampled in the 238..244 band (~90 s per cycle) -- each
+chain leg aims at an explicit slot target and re-times from the capture it
+just parsed, so the legs walk the band bottom-to-top and end just past the
+rotation, and no timing error can compound from one leg into the next.
 
 Run (lab desktop, repo root, venv active; board on a DUMP_NSFLASH=2 build):
     python -m offdevice.data.campaign --hours 71
@@ -73,11 +73,21 @@ FILL_INTERVAL_S = 9 * 60.0
 # be its byte-identical clone.
 TOPUP_DELAYS_S = (420.0, 450.0)
 
-CHAIN_TARGET_USED = 118           # mid-band slot count on the current page
-CHAIN_CAPTURES = 5
-# One page cycle plus ~5 records: each successive capture drifts up through the
-# band, then past a rotation into the just-after-rotation state.
-CHAIN_INTERVAL_S = PAGE_CYCLE_S + 78.0
+# Cycle-extreme chain: explicit used-slot targets, one leg per page cycle. The
+# first four walk the 238..244-record band bottom-to-top (used 116..122 once
+# the ring has wrapped); the last is the just-after-rotation state, the
+# cycle's other extreme. Aiming starts at the band's BOTTOM because landings
+# run high, not low: real drift beats the pure 15 s/record model (each capture
+# reboot re-phases the record clock, and the tick behind it is an RC-derived
+# HAL millisecond), measured at ~+2 records per leg -- and +2 past any target
+# below still lands a band, full-ring, or just-after-rotation state.
+CHAIN_TARGETS_USED = (116, 118, 120, 122, 4)
+
+# GOTCHA: two captures freezing inside one record period hold the same ring
+# image -- a byte-identical clone that double-weights training and leaks
+# holdout questions (it has happened twice, both at phase seams). Three record
+# periods of forced spacing keeps it structurally impossible.
+MIN_CAPTURE_GAP_S = 3.0 * PERIOD_S
 
 _RETRYABLE = (CaptureError, CollectError, serial.SerialException, subprocess.TimeoutExpired)
 
@@ -100,15 +110,18 @@ class Ctx:
 # ---- pure ring math (unit-tested; no I/O) -----------------------------------------
 
 
-def seconds_until_band(used_slots: int, elapsed_s: float) -> float:
-    """Wall-clock wait until the current page should reach CHAIN_TARGET_USED slots.
+def seconds_until_used(used_slots: int, target_used: int, elapsed_s: float,
+                       min_wait_s: float = 0.0) -> float:
+    """Wall-clock wait until the current page should hold target_used slots.
 
     used_slots comes from a capture parsed elapsed_s ago; one record lands every
-    PERIOD_S while the board runs. Extrapolation error (each capture reboot
-    pauses logging ~15 s) stays small against the band's 90 s width.
+    PERIOD_S while the board runs. A wait under min_wait_s rolls forward whole
+    page cycles: chain legs pass half a page cycle there, so consecutive legs
+    sample different page contents rather than near-identical neighbors from
+    the same cycle.
     """
-    wait = ((CHAIN_TARGET_USED - used_slots) % PAGE_RECORDS) * PERIOD_S - elapsed_s
-    while wait < 0:
+    wait = ((target_used - used_slots) % PAGE_RECORDS) * PERIOD_S - elapsed_s
+    while wait < min_wait_s:
         wait += PAGE_CYCLE_S
     return wait
 
@@ -229,7 +242,8 @@ def run_topup(ctx: Ctx, prefix: str) -> tuple[Path, float]:
 
     The splitter keeps single-capture strata entirely in training, so the
     near-empty stratum needs at least two distinct captures to be examinable;
-    the fill walk contributes one more.
+    the fill walk contributes one more. The last capture is returned as the
+    scheduling seed for whatever runs next.
     """
     tag = f"{prefix}-fill2"
     _log(ctx.log, f"campaign: near-empty top-up begins (tag={tag})")
@@ -246,23 +260,25 @@ def run_topup(ctx: Ctx, prefix: str) -> tuple[Path, float]:
 
 
 def run_chain(ctx: Ctx, tag: str, newest: tuple[Path, float]) -> tuple[Path, float]:
-    """One cycle-extreme chain, timed from the newest capture's parsed state."""
+    """One cycle-extreme chain: a capture per target slot, re-timed leg by leg."""
     used, total, post_wrap = ring_state(region_of(newest[0]))
     if not post_wrap:
         _log(ctx.log, f"campaign: chain {tag} SKIPPED -- ring has not wrapped yet "
                       f"(total={total}); steady sampling continues")
         return newest
-    wait = seconds_until_band(used, time.monotonic() - newest[1])
-    _log(ctx.log, f"campaign: chain {tag} waiting {wait / 60:.1f} min for the "
-                  f"{BAND_LO}..{BAND_HI}-record band (extrapolated from used={used})")
-    time.sleep(wait)
     last = newest
-    for i in range(CHAIN_CAPTURES):
-        if i > 0:
-            time.sleep(CHAIN_INTERVAL_S)
+    for i, target in enumerate(CHAIN_TARGETS_USED):
+        min_wait = 0.0 if i == 0 else PAGE_CYCLE_S / 2.0
+        elapsed = time.monotonic() - last[1]
+        wait = max(seconds_until_used(used, target, elapsed, min_wait),
+                   MIN_CAPTURE_GAP_S - elapsed)
+        _log(ctx.log, f"campaign: chain {tag} leg {i + 1}/{len(CHAIN_TARGETS_USED)} "
+                      f"waiting {wait / 60:.1f} min to reach used={target} "
+                      f"(band {BAND_LO}..{BAND_HI}; extrapolated from used={used})")
+        time.sleep(wait)
         last = capture_with_retry(ctx, tag)
-        _, chain_total, _ = ring_state(region_of(last[0]))
-        _log(ctx.log, f"campaign: chain {tag} capture {i + 1}/{CHAIN_CAPTURES}: "
+        used, chain_total, _ = ring_state(region_of(last[0]))
+        _log(ctx.log, f"campaign: chain {tag} capture {i + 1}/{len(CHAIN_TARGETS_USED)}: "
                       f"total={chain_total} (target band {BAND_LO}..{BAND_HI})")
     return last
 
@@ -292,8 +308,10 @@ def run_campaign(ctx: Ctx, prefix: str, hours: float, steady_interval_s: float,
             newest = capture_with_retry(ctx, steady_tag)
         else:
             run_fill_walk(ctx, prefix)
-            run_topup(ctx, prefix)
-            newest = capture_with_retry(ctx, steady_tag)
+            # The top-up's last capture seeds the steady loop and the chain
+            # math -- a fresh seed capture here would re-freeze the same ring
+            # within seconds of it: a byte-identical clone.
+            newest = run_topup(ctx, prefix)
         next_steady = time.monotonic() + steady_interval_s
 
         while True:
