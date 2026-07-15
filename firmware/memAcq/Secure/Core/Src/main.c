@@ -24,6 +24,7 @@
 #include <string.h>
 #include "flash_dump.h"
 #include "static_hash.h"   /* Part-1 IDS: static NS-region SHA-256 vs golden */
+#include "nv_features.h"   /* Part-2 IDS: NV-region features (parity harness for now) */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -214,6 +215,13 @@ int main(void)
      NonSecure read is silently RAZ/WI -- the NS code would run fine and just
      never see a press. GPIOC's clock is already on (MX_GPIO_Init). */
   HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_13, GPIO_PIN_NSEC);
+
+#if NV_FEAT_PARITY
+  /* Parity gate (a): run the golden fixture through the on-chip feature
+     chain and print the 120 outputs; offdevice/features/parity_check.py
+     compares them to the committed golden on the laptop. */
+  NvFeatures_ParityPrint();
+#endif
 
 #if OSPI_XIP_BRINGUP
   /* Bring up OSPI XIP at 0x90000000. Must run before HAL_SuspendTick() (it uses HAL_Delay).
