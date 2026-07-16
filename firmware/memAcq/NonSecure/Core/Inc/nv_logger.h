@@ -35,7 +35,7 @@
    and any capture's journal can be re-derived exactly afterwards. It plans at
    most 3 changes per page (the free slots after J0), so it can never hit the
    journal-full refusal by itself. The deploy build NEVER sets this. */
-#define NV_SETTINGS_EXERCISE   1
+#define NV_SETTINGS_EXERCISE   0
 /* Seed chosen so a fresh ring exercises the schedule early (page 0: two
    changes; page 3: a full journal) -- bench-verifiable in minutes at the dev
    rate, while the long-run distribution stays ~72/22/4/2 (checked over 100k
