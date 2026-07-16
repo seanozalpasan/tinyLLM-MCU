@@ -1,0 +1,32 @@
+# Collaborator anomaly BASE captures -- the benign files sent out for tampering.
+#
+# Every anomaly the collaborator returns is a byte-for-byte copy of one of these
+# with only the 4 KB NV region altered, so each anomaly's score is meaningful only
+# against the base it came from: the eval diffs the returned file against the base
+# named here and refuses anything whose bytes outside the NV region moved. The md5
+# is the whole 256 KB capture as it was mailed -- when the finished campaign merges
+# into the manifest, each of these names must reappear with the SAME md5, or the
+# file the collaborator tampered is not the file the model trained around.
+#
+# Chosen 2026-07-13 from a mid-campaign snapshot (75 captures), before any model or
+# threshold existed -- git's timestamp on this file is that proof. The picks span
+# ring fill states, record counts (36..244), and settings-journal shapes, and no
+# capture was taken from a stratum holding only one example (the single empty ring,
+# pre-wrap/settings-quiet, just-wrapped/settings-changed): holding a lone example
+# out of training would leave that benign state unlearned, which is how a false
+# positive gets manufactured.
+#
+# Format matches holdout.txt (bare filename, '#' comment) so this file can be read
+# by read_name_list. NOTHING READS IT YET -- whether these captures get pinned into
+# the holdout is decided at session 06, before the fit.
+#
+# sent=2026-07-13  spec=v2  campaign=nv15s-lab-*
+
+benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin    # 36 recs   near-empty    quiet    p0:1       md5=a8b01ca9981c340cca1913aead0a3ddf
+benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin  # 130 recs  steady        quiet    p0:1 p1:1  md5=ca3064e261353c94883ebc10eecd8bc9
+benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin  # 146 recs  steady        changed  p0:1 p1:3  md5=3f5c4f812ba5c14e99d85dee0b454c02
+benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin    # 166 recs  just-wrapped  quiet    p0:1 p1:1  md5=26340f79b1e896dc030e2378b7bf4565
+benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin  # 178 recs  steady        changed  p0:1 p1:4  md5=4cbd47dc2fae55a2faada04dd3d678d8
+benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin    # 216 recs  pre-wrap      changed  p0:3 p1:1  md5=2145d64d9fd4ebf927c1bb57260168a4
+benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin     # 242 recs  steady        quiet    p0:1 p1:1  md5=c9ecf3a0a0e2fc0362e3ec7055c5d56b
+benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin  # 244 recs  steady        changed  p0:2 p1:1  md5=889d2ed80ed4efad01b118532ac814c3

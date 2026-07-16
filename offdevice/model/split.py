@@ -12,13 +12,21 @@ beyond that set, because their captures would carry zero exam coverage. An exist
 list is never overwritten without --force -- a re-split invalidates any model already
 fitted against the old one.
 
+--pin forces a name-list's captures (the collaborator's anomaly bases) into the
+holdout: every returned anomaly is a tampered copy of one of them, so the model
+must never have trained on the file under the tampering, or the detection numbers
+carry a memorized-base confound. 'md5=' comments in the pin file are verified
+against the manifest -- the file being tampered must be byte-for-byte the file
+locked out of training.
+
 Choose the split (writes offdevice/data/holdout.txt, which gets committed):
-    python -m offdevice.model.split nv45s-lab-fill1 nv45s-lab-w1
+    python -m offdevice.model.split nv15s-lab-fill1 nv15s-lab-steady1 --pin offdevice/data/collab_bases.txt
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -63,18 +71,48 @@ def read_holdout_variants(path: str | Path) -> frozenset[str] | None:
     return None
 
 
+_MD5_RE = re.compile(r"\bmd5=([0-9a-fA-F]{32})\b")
+
+
+def read_pin_md5s(path: str | Path) -> dict[str, str]:
+    """name -> recorded md5, for pin-file lines whose comment carries 'md5=...'.
+
+    collab_bases.txt records each base's md5 as it was MAILED; the split verifies
+    the banked capture still matches before pinning, or the file the collaborator
+    is tampering is not the file being locked out of training. Lines without an
+    md5 comment simply aren't checked.
+    """
+    out: dict[str, str] = {}
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        name, _, comment = raw.partition("#")
+        name = name.strip()
+        m = _MD5_RE.search(comment)
+        if name and m:
+            out[name] = m.group(1).lower()
+    return out
+
+
 def choose_holdout(
-    samples: list[Sample], fraction: float, seed: int
+    samples: list[Sample], fraction: float, seed: int,
+    pinned: frozenset[str] | set[str] = frozenset(),
 ) -> tuple[list[Sample], list[str]]:
     """Stratified pick: per (fill state, settings state) stratum,
-    max(1, round(fraction*n)) capped at n-1.
+    max(1, round(fraction*n)) capped at n-1; `pinned` names are forced in.
 
     A single-capture stratum stays entirely in training -- holding out its only
     example would leave that benign state unlearned, a worse trade than losing its
-    exam coverage. Returns (chosen samples, human notes for the file header).
+    exam coverage. Pinned captures (the collaborator's anomaly bases: every
+    returned anomaly is a tampered copy of one, so the model must never train on
+    them) take their stratum's exam seats first and widen the quota if they
+    outnumber it -- but never past the n-1 cap, and never out of a singleton
+    stratum. Returns (chosen samples, human notes for the file header).
     """
     if not (0.0 < fraction < 1.0):
         raise ValueError(f"fraction must be in (0, 1), got {fraction}")
+    known = {Path(s.record.file).name for s in samples}
+    missing = sorted(set(pinned) - known)
+    if missing:
+        raise ValueError(f"pinned name(s) not among the loaded captures: {missing}")
     rng = np.random.default_rng(seed)
     by_stratum: dict[str, list[Sample]] = {}
     for s in sorted(samples, key=lambda s: s.record.file):
@@ -89,19 +127,34 @@ def choose_holdout(
             n = len(group)
             if n == 0:
                 continue
+            pin_idx = [i for i, s in enumerate(group)
+                       if Path(s.record.file).name in pinned]
             if n == 1:
+                if pin_idx:
+                    raise ValueError(f"{stratum}: its only capture is pinned -- "
+                                     f"holding it out would leave that benign state "
+                                     f"unlearned")
                 notes.append(f"{stratum}: only 1 capture -- kept in training")
                 continue
-            k = min(n - 1, max(1, round(fraction * n)))
-            idx = sorted(rng.choice(n, size=k, replace=False).tolist())
+            if len(pin_idx) > n - 1:
+                raise ValueError(f"{stratum}: {len(pin_idx)} pinned of {n} -- training "
+                                 f"must keep at least one capture of every benign state")
+            k = max(min(n - 1, max(1, round(fraction * n))), len(pin_idx))
+            pool = [i for i in range(n) if i not in pin_idx]
+            extra = rng.choice(len(pool), size=k - len(pin_idx), replace=False)
+            idx = sorted(pin_idx + [pool[i] for i in extra.tolist()])
             chosen.extend(group[i] for i in idx)
-            notes.append(f"{stratum}: held out {k} of {n}")
+            note = f"{stratum}: held out {k} of {n}"
+            if pin_idx:
+                note += f" ({len(pin_idx)} pinned)"
+            notes.append(note)
     return chosen, notes
 
 
 def write_holdout(
     path: Path, chosen: list[Sample], variants: tuple[str, ...],
     fraction: float, seed: int, n_total: int, notes: list[str],
+    pinned: frozenset[str] | set[str] = frozenset(),
 ) -> None:
     """Write the holdout .txt: a self-documenting header, then one filename per line."""
     lines = [
@@ -110,20 +163,30 @@ def write_holdout(
         "# exactly once (offdevice/model/score.py), after the threshold is chosen,",
         "# as the honest false-positive check. Everything else in the manifest with",
         "# the variants below is training data.",
+    ]
+    if pinned:
+        lines += [
+            "# 'pinned' = a collaborator anomaly base (offdevice/data/collab_bases.txt)",
+            "# forced into the exam: every returned anomaly is a tampered copy of one,",
+            "# and the model must never have trained on the file under the tampering.",
+        ]
+    lines += [
         # Machine-read by read_holdout_variants -- keep the "# variants:" prefix.
         f"{_VARIANTS_PREFIX} {','.join(variants)}",
         f"# created={datetime.now().isoformat(timespec='seconds')} seed={seed} "
         f"fraction={fraction}",
         f"# {len(chosen)} of {n_total} captures held out -- " + "; ".join(notes),
     ]
-    lines += [f"{s.record.file}  # {s.fill_state}/{s.settings_state}" for s in chosen]
+    for s in chosen:
+        tag = "  pinned" if Path(s.record.file).name in pinned else ""
+        lines.append(f"{s.record.file}  # {s.fill_state}/{s.settings_state}{tag}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Choose the stratified holdout set and write it to a committed .txt.")
-    ap.add_argument("variants", nargs="+", help="campaign tags, e.g. nv45s-lab-fill1 nv45s-lab-w1")
+    ap.add_argument("variants", nargs="+", help="campaign tags, e.g. nv15s-lab-fill1 nv15s-lab-steady1")
     ap.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     ap.add_argument("--out", type=Path, default=DEFAULT_HOLDOUT,
                     help=f"holdout .txt to write (default {DEFAULT_HOLDOUT})")
@@ -131,6 +194,10 @@ def main() -> int:
                     help="held-out share per stratum (default 0.20)")
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED,
                     help="RNG seed -- recorded in the file so the pick is reproducible")
+    ap.add_argument("--pin", type=Path, default=None,
+                    help="name-list .txt (collab_bases.txt format) whose captures are "
+                         "forced into the holdout; 'md5=' comments are verified "
+                         "against the manifest")
     ap.add_argument("--allow-out-of-range", action="store_true",
                     help="split despite captures whose values leave their legal ranges")
     ap.add_argument("--force", action="store_true",
@@ -163,13 +230,35 @@ def main() -> int:
               f"{bad_range[:3]}{'...' if len(bad_range) > 3 else ''}")
         return 1
 
-    chosen, notes = choose_holdout(samples, args.fraction, args.seed)
+    pinned: frozenset[str] = frozenset()
+    if args.pin is not None:
+        pinned = read_name_list(args.pin)
+        if not pinned:
+            print(f"[split] {args.pin} names no captures -- nothing to pin")
+            return 1
+        by_name = {Path(s.record.file).name: s for s in samples}
+        absent = sorted(pinned - by_name.keys())
+        if absent:
+            print(f"[split] pinned name(s) not among the loaded captures (wrong tag, "
+                  f"quarantined, or not banked?): {absent}")
+            return 1
+        for name, mailed in read_pin_md5s(args.pin).items():
+            banked = by_name[name].record.md5.lower()
+            if banked != mailed:
+                print(f"[split] {name}: banked md5 {banked} != mailed md5 {mailed} -- "
+                      f"the file the collaborator is tampering is not the banked "
+                      f"capture; resolve before locking the exam")
+                return 1
+        print(f"[split] pinning {len(pinned)} capture(s) from {args.pin} into the "
+              f"holdout (md5s verified against the manifest)")
+
+    chosen, notes = choose_holdout(samples, args.fraction, args.seed, pinned=pinned)
     if not chosen:
         print("[split] nothing can be held out safely (every fill state has a single "
               "capture) -- collect more data first; an empty exam set is not a split")
         return 1
     write_holdout(args.out, chosen, tuple(args.variants), args.fraction, args.seed,
-                  len(samples), notes)
+                  len(samples), notes, pinned=pinned)
     print(f"[split] {len(chosen)} of {len(samples)} captures -> {args.out}")
     for note in notes:
         print(f"[split]   {note}")

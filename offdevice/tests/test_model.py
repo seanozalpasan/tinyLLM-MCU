@@ -44,6 +44,7 @@ from offdevice.model.split import (
     choose_holdout,
     read_holdout,
     read_holdout_variants,
+    read_pin_md5s,
     write_holdout,
 )
 from offdevice.nv import spec
@@ -483,6 +484,73 @@ def test_holdout_without_variants_header_reads_none(tmp_path: Path) -> None:
     path.write_text("# a pre-scope-check list\nx.bin\n", encoding="utf-8")
     assert read_holdout(path) == frozenset({"x.bin"})
     assert read_holdout_variants(path) is None
+
+
+def test_choose_holdout_pins_forced_into_exam() -> None:
+    # Pinned names (the collaborator's anomaly bases) always land on the exam;
+    # random picks fill the rest of the stratum's quota.
+    samples = _fake_samples({"steady": 10})
+    pinned = frozenset({"cap003.bin", "cap007.bin"})
+    chosen, notes = choose_holdout(samples, fraction=0.5, seed=7, pinned=pinned)
+    names = {s.record.file for s in chosen}
+    assert pinned <= names
+    assert len(chosen) == 5                        # round(0.5*10): pins + top-up
+    assert any("(2 pinned)" in n for n in notes)
+
+
+def test_choose_holdout_pins_widen_a_small_quota() -> None:
+    # Three pins against a base quota of 1: the pins take the seats, the quota grows.
+    samples = _fake_samples({"steady": 10})
+    pinned = frozenset({"cap001.bin", "cap004.bin", "cap008.bin"})
+    chosen, _ = choose_holdout(samples, fraction=0.1, seed=7, pinned=pinned)
+    assert {s.record.file for s in chosen} == set(pinned)
+
+
+def test_choose_holdout_pin_cannot_empty_a_stratum() -> None:
+    # Training must keep at least one capture of every benign state (the n-1 cap).
+    samples = _fake_samples({"steady": 2})
+    with pytest.raises(ValueError, match="at least one"):
+        choose_holdout(samples, fraction=0.2, seed=1,
+                       pinned=frozenset({"cap000.bin", "cap001.bin"}))
+
+
+def test_choose_holdout_pinned_singleton_errors() -> None:
+    # cap004.bin is the lone empty capture: pinning it would leave the empty
+    # ring state unlearned -- refused, never silently kept in training.
+    samples = _fake_samples({"steady": 4, "empty": 1})
+    with pytest.raises(ValueError, match="only capture"):
+        choose_holdout(samples, fraction=0.2, seed=1,
+                       pinned=frozenset({"cap004.bin"}))
+
+
+def test_choose_holdout_pin_unknown_name_errors() -> None:
+    with pytest.raises(ValueError, match="not among"):
+        choose_holdout(_fake_samples({"steady": 3}), fraction=0.2, seed=1,
+                       pinned=frozenset({"ghost.bin"}))
+
+
+def test_holdout_file_marks_pinned_lines(tmp_path: Path) -> None:
+    samples = _fake_samples({"steady": 4})
+    pinned = frozenset({"cap002.bin"})
+    chosen, notes = choose_holdout(samples, fraction=0.5, seed=3, pinned=pinned)
+    path = tmp_path / "holdout.txt"
+    write_holdout(path, chosen, ("campaign",), 0.5, 3, len(samples), notes,
+                  pinned=pinned)
+    assert "cap002.bin" in read_holdout(path)
+    assert any(line.startswith("cap002.bin") and line.rstrip().endswith("pinned")
+               for line in path.read_text(encoding="utf-8").splitlines())
+
+
+def test_read_pin_md5s_parses_collab_format(tmp_path: Path) -> None:
+    # collab_bases.txt style: bare name, then a comment that may carry 'md5=...';
+    # lines without one are pinned but not md5-checked.
+    mailed = "AB" * 16
+    path = tmp_path / "bases.txt"
+    path.write_text(f"# header comment, no name\n"
+                    f"a.bin    # 36 recs  near-empty  quiet  md5={mailed}\n"
+                    f"b.bin    # no md5 recorded\n",
+                    encoding="utf-8")
+    assert read_pin_md5s(path) == {"a.bin": mailed.lower()}
 
 
 # ---- fit / score / threshold / artifact --------------------------------------------

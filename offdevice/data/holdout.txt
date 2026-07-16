@@ -1,0 +1,42 @@
+# Benign holdout list -- the locked-away exam set.
+# These captures never touch a model fit or a threshold; they are scored
+# exactly once (offdevice/model/score.py), after the threshold is chosen,
+# as the honest false-positive check. Everything else in the manifest with
+# the variants below is training data.
+# 'pinned' = a collaborator anomaly base (offdevice/data/collab_bases.txt)
+# forced into the exam: every returned anomaly is a tampered copy of one,
+# and the model must never have trained on the file under the tampering.
+# variants: nv15s-lab-fill1,nv15s-lab-fill2,nv15s-lab-steady1,nv15s-lab-top1,nv15s-lab-top2,nv15s-lab-top3,nv15s-lab2-steady1,nv15s-lab2-top1
+# created=2026-07-16T16:23:16 seed=2026 fraction=0.2
+# 31 of 153 captures held out -- empty/settings-quiet: only 1 capture -- kept in training; near-empty/settings-quiet: held out 1 of 3 (1 pinned); pre-wrap/settings-quiet: only 1 capture -- kept in training; pre-wrap/settings-changed: held out 1 of 5 (1 pinned); just-wrapped/settings-quiet: held out 1 of 2 (1 pinned); just-wrapped/settings-changed: only 1 capture -- kept in training; steady/settings-quiet: held out 18 of 91 (2 pinned); steady/settings-changed: held out 10 of 49 (3 pinned)
+benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin  # near-empty/settings-quiet  pinned
+benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin  # pre-wrap/settings-changed  pinned
+benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin  # just-wrapped/settings-quiet  pinned
+benign__tbA__nv15s-lab-steady1__run008__20260712T035317.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run012__20260712T063335.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-steady1__run021__20260712T123414.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run024__20260712T143426.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run043__20260713T061311.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run044__20260713T065316.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run047__20260713T085329.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run068__20260714T014056.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run088__20260714T150222.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run092__20260714T195818.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run101__20260715T015858.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run105__20260715T043915.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run109__20260715T071932.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run111__20260715T083940.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-top1__run004__20260712T193203.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab2-top1__run003__20260715T165101.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-steady1__run036__20260713T013241.bin  # steady/settings-changed
+benign__tbA__nv15s-lab-steady1__run052__20260713T121350.bin  # steady/settings-changed
+benign__tbA__nv15s-lab-steady1__run054__20260713T133400.bin  # steady/settings-changed
+benign__tbA__nv15s-lab-steady1__run059__20260713T165423.bin  # steady/settings-changed
+benign__tbA__nv15s-lab-steady1__run060__20260713T202021.bin  # steady/settings-changed
+benign__tbA__nv15s-lab-steady1__run078__20260714T082138.bin  # steady/settings-changed
+benign__tbA__nv15s-lab-steady1__run095__20260714T215832.bin  # steady/settings-changed
