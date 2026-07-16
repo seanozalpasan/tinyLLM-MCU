@@ -11,5 +11,9 @@ __pycache__/
 *.d
 *.cyclo
 
-# Captured NS-flash dumps + their manifest (dev-phase dataset; large, laptop-local).
-offdevice/data/captures/
+# Host parity binary -- rebuilt from engine/ sources in one gcc command.
+engine/nv_parity.exe
+
+# Retired captures (v1 rehearsal, smoke runs, quarantined duplicates) -- laptop-local.
+# captures/ itself IS tracked: the committed training+holdout set + manifest.
+offdevice/data/captures_retired/
