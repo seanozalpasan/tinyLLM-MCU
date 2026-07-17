@@ -13,3 +13,8 @@ pytest>=8.0
 # drives USART1 @ 921600 8N1 to read the framed 256 KB dump. Pure-python and tiny, so it
 # doesn't perturb the librosa/numpy/scipy versions that define the feature contract.
 pyserial>=3.5
+
+# Anomaly-eval report figures only (offdevice/eval/report_plots.py). Rendering, never
+# math: no feature or model number depends on it, so it sits outside the pinned
+# librosa/numpy/scipy contract.
+matplotlib>=3.8
