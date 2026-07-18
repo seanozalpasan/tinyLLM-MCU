@@ -11,8 +11,13 @@
  * golden (same-boot flash read-after-write can be stale through the cache);
  * it prints what it wrote, and comparison starts on the next boot.
  *
- * On MISMATCH the anomaly signal is (for now) a loud console line; wiring it
- * into the watchdog verdict is the Week-3 integration.
+ * Runtime, the check re-runs before EVERY NV record write (the NonSecure
+ * logger calls in through the SECURE_StaticHash_PreWriteCheck veneer): no
+ * record is appended by an image that has not just re-proven its integrity.
+ * The verdict feeds the secure watchdog gate two ways -- a mismatch latches
+ * dirty (withhold every future kick), and each clean check advances a
+ * heartbeat counter the scan tick requires to move between kicks, so a
+ * workload that stops checking goes silent into a reset.
  */
 
 #include "static_hash.h"
@@ -22,6 +27,15 @@
 
 #include "main.h"
 #include "nv_spec.h"   /* NV_NS_FLASH_BASE + NV_STATIC_SIZE: the hash ends where NV begins */
+
+/* ===== runtime gate state (read by the secure scan tick) ===== */
+
+/* Set on any enroll attempt: the golden was (re)programmed THIS boot, and a
+   same-boot flash read can serve stale bytes, so runtime comparison is
+   meaningless until the next boot -- the boot check's own rule. */
+static int      s_enroll_boot;
+static int      s_dirty;        /* latched: some check saw a mismatch */
+static uint32_t s_clean_count;  /* completed clean runtime checks (heartbeat) */
 
 /* ===== SHA-256 over the static NS range (HW HASH peripheral) ===== */
 
@@ -149,6 +163,9 @@ void StaticHash_BootCheck(void)
 
   if (blank || held)
   {
+    /* From here the golden is (being) reprogrammed this boot: runtime
+       comparison is off until the next boot whether the write works or not. */
+    s_enroll_boot = 1;
     if (write_golden(digest) != 0)
     {
       printf("[HASH] ERROR: golden write failed\r\n");
@@ -167,8 +184,61 @@ void StaticHash_BootCheck(void)
   }
   else
   {
+    s_dirty = 1;   /* the scan tick reads this: no kick until B2 re-enroll */
     printf("[HASH] *** MISMATCH *** -- NS static region changed without enrollment => ANOMALY\r\n");
     print_digest("[HASH]   computed=", digest);
     print_digest("[HASH]   golden  =", (const uint8_t *)STATIC_HASH_GOLDEN_ADDR);
   }
 }
+
+/* ===== runtime re-check (reached from the NonSecure logger, pre-write) ===== */
+
+int StaticHash_RuntimeCheck(void)
+{
+  uint8_t digest[STATIC_HASH_DIGEST_LEN];
+
+  if (s_enroll_boot)
+  {
+    /* The golden was programmed THIS boot and a same-boot read of it can be
+       stale -- comparing would be noise either way. Count the heartbeat so an
+       enroll boot survives the scan gate; comparison starts next boot. */
+    s_clean_count++;
+    return 0;
+  }
+
+  /* Invalidate before hashing, same law as the NV scan: a payload written
+     into static flash this boot must not hide behind a stale cached line.
+     GOTCHA: the scan interrupt also invalidates this cache; masking
+     interrupts for the few microseconds of the invalidate keeps the two
+     invalidations from interleaving inside one hardware operation (the wait
+     loops share one done-flag, and the HAL tick that would time out a
+     confused wait is suspended). */
+  __disable_irq();
+  const HAL_StatusTypeDef inv = HAL_ICACHE_Invalidate();
+  __enable_irq();
+  if (inv != HAL_OK)
+  {
+    printf("[HASH] runtime check: cache invalidate FAILED\r\n");
+    return -1;   /* not evidence of tamper, but never a clean verdict */
+  }
+
+  if (compute_sha256(digest) != 0)
+  {
+    printf("[HASH] runtime check: SHA-256 compute FAILED\r\n");
+    return -1;
+  }
+
+  if (memcmp(digest, (const uint8_t *)STATIC_HASH_GOLDEN_ADDR,
+             STATIC_HASH_DIGEST_LEN) != 0)
+  {
+    s_dirty = 1;
+    printf("[HASH] *** MISMATCH *** (pre-write check) -- static region changed => ANOMALY latched\r\n");
+    return -1;
+  }
+
+  s_clean_count++;
+  return 0;
+}
+
+int      StaticHash_Dirty(void)      { return s_dirty; }
+uint32_t StaticHash_CheckCount(void) { return s_clean_count; }
