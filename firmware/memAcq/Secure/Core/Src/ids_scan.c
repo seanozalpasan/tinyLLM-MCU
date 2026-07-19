@@ -211,6 +211,14 @@ static void iwdg_arm(void)
 
 void IdsScan_Init(void)
 {
+#if !IDS_SCAN_ARMED
+  /* Collection builds only: no tick, no IWDG, no self-reset -- ring pages
+     fill uninterrupted. The banner is deliberately unmissable so a disarmed
+     board can never pass for a deploy build. */
+  printf("[IDS] *** DISARMED BUILD (IDS_SCAN_ARMED 0) -- no scan, no "
+         "watchdog; data collection only ***\r\n");
+  return;
+#endif
   /* Lock TIM2 to the Secure world FIRST: from here on, NonSecure reads of
      its registers are zeros and writes are ignored -- the scan schedule is
      out of the attacker's reach. */

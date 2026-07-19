@@ -143,3 +143,36 @@
 [2026-07-18T21:00:56] positioning capture: used=1/122 total=123; waiting for the tail
 [2026-07-18T21:00:56] sleeping 24.7 min until used~100
 [2026-07-18T21:00:56] time budget reached -- done (63 tail captures)
+[2026-07-19T12:31:38] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run000__20260719T123138.bin
+[2026-07-19T12:31:38] positioning capture: used=47/122 total=169
+[2026-07-19T12:31:38] sleeping 47.9 min to aim slot ~117
+[2026-07-19T13:19:37] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run001__20260719T131937.bin
+[2026-07-19T13:19:37] honest tail banked: used=120/122 total=242 (count 1)
+[2026-07-19T13:19:37] sleeping 30.2 min to aim slot ~119
+[2026-07-19T13:49:52] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run002__20260719T134952.bin
+[2026-07-19T13:49:52] honest tail banked: used=121/122 total=243 (count 2)
+[2026-07-19T13:49:52] sleeping 30.2 min to aim slot ~120
+[2026-07-19T14:20:07] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run003__20260719T142007.bin
+[2026-07-19T14:20:07] honest tail banked: used=122/122 total=244 (count 3)
+[2026-07-19T14:20:07] sleeping 29.2 min to aim slot ~117
+[2026-07-19T14:49:23] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run004__20260719T144923.bin
+[2026-07-19T14:49:23] honest tail banked: used=118/122 total=240 (count 4)
+[2026-07-19T14:49:23] sleeping 30.7 min to aim slot ~119
+[2026-07-19T15:20:07] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run005__20260719T152007.bin
+[2026-07-19T15:20:07] honest tail banked: used=121/122 total=243 (count 5)
+[2026-07-19T15:20:07] sleeping 30.2 min to aim slot ~120
+[2026-07-19T15:50:22] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run006__20260719T155022.bin
+[2026-07-19T15:50:22] honest tail banked: used=121/122 total=243 (count 6)
+[2026-07-19T15:50:22] sleeping 29.5 min to aim slot ~117
+[2026-07-19T16:19:52] campaign: capture ok tag=nv15s-lab-tail2: benign__tbA__nv15s-lab-tail2__run007__20260719T161952.bin
+[2026-07-19T16:19:52] honest tail banked: used=118/122 total=240 (count 7)
+[2026-07-19T16:19:52] time budget reached -- done (7 honest tails, 0 honesty fails)
+[2026-07-19T16:37:13] campaign: capture ok tag=nv15s-lab-tail3-withsettings: benign__tbA__nv15s-lab-tail3-withsettings__run000__20260719T163713.bin
+[2026-07-19T16:37:13] positioning capture: used=66/122 total=188
+[2026-07-19T16:37:13] sleeping 43.2 min to aim slot ~117
+[2026-07-19T17:20:28] campaign: capture ok tag=nv15s-lab-tail3-withsettings: benign__tbA__nv15s-lab-tail3-withsettings__run001__20260719T172028.bin
+[2026-07-19T17:20:28] honest tail banked: used=119/122 total=241 (count 1)
+[2026-07-19T17:20:28] sleeping 30.4 min to aim slot ~119
+[2026-07-19T17:50:58] campaign: capture ok tag=nv15s-lab-tail3-withsettings: benign__tbA__nv15s-lab-tail3-withsettings__run002__20260719T175058.bin
+[2026-07-19T17:50:58] honest tail banked: used=120/122 total=242 (count 2)
+[2026-07-19T17:50:58] time budget reached -- done (2 honest tails, 0 honesty fails)

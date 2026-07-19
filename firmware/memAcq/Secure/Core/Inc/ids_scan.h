@@ -16,6 +16,17 @@
 #ifndef IDS_SCAN_H
 #define IDS_SCAN_H
 
+/* Build switch: 1 = the real IDS (scan tick + watchdog) -- every deploy,
+   soak, and demo build. 0 = DISARMED: IdsScan_Init prints a loud banner and
+   arms nothing -- no scan, no watchdog, no self-reset -- so an unattended
+   benign data collection can run page cycles uninterrupted (a mid-fill
+   watchdog reset would seam the very ring states being banked; the scan
+   itself never writes the NV region, so the collected bytes are identical
+   to deploy-build data). GOTCHA: a disarmed board has NO tamper response at
+   all -- flip back to 1 and reflash Secure before any soak or demo; the
+   boot banner says which build is running. */
+#define IDS_SCAN_ARMED  1
+
 /* Scan period. A parameter until the post-latency cadence decision; the same
    tick feeds the watchdog, so this must stay under IDS_WATCHDOG_PERIOD_S,
    which is itself under the 32.7 s IWDG hardware ceiling. */
