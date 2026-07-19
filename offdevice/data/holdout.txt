@@ -3,40 +3,57 @@
 # exactly once (offdevice/model/score.py), after the threshold is chosen,
 # as the honest false-positive check. Everything else in the manifest with
 # the variants below is training data.
-# 'pinned' = a collaborator anomaly base (offdevice/data/collab_bases.txt)
-# forced into the exam: every returned anomaly is a tampered copy of one,
-# and the model must never have trained on the file under the tampering.
-# variants: nv15s-lab-fill1,nv15s-lab-fill2,nv15s-lab-steady1,nv15s-lab-top1,nv15s-lab-top2,nv15s-lab-top3,nv15s-lab2-steady1,nv15s-lab2-top1
-# created=2026-07-16T16:23:16 seed=2026 fraction=0.2
-# 31 of 153 captures held out -- empty/settings-quiet: only 1 capture -- kept in training; near-empty/settings-quiet: held out 1 of 3 (1 pinned); pre-wrap/settings-quiet: only 1 capture -- kept in training; pre-wrap/settings-changed: held out 1 of 5 (1 pinned); just-wrapped/settings-quiet: held out 1 of 2 (1 pinned); just-wrapped/settings-changed: only 1 capture -- kept in training; steady/settings-quiet: held out 18 of 91 (2 pinned); steady/settings-changed: held out 10 of 49 (3 pinned)
+# 'pinned' = a capture the split's --pin list forced into the exam; the
+# pin file records each name's reason (e.g. a collaborator anomaly base
+# the model must never train on, or a deliberately capped subsample).
+# variants: nv15s-lab-fill1,nv15s-lab-fill2,nv15s-lab-steady1,nv15s-lab-top1,nv15s-lab-top2,nv15s-lab-top3,nv15s-lab2-steady1,nv15s-lab2-top1,nv15s-lab-tail1
+# created=2026-07-19T01:57:04 seed=2026 fraction=0.2
+# 48 of 222 captures held out -- empty/settings-quiet: only 1 capture -- kept in training; near-empty/settings-quiet: held out 1 of 3 (1 pinned); pre-wrap/settings-quiet: only 1 capture -- kept in training; pre-wrap/settings-changed: held out 1 of 5 (1 pinned); just-wrapped/settings-quiet: held out 1 of 2 (1 pinned); just-wrapped/settings-changed: only 1 capture -- kept in training; steady/settings-quiet: held out 26 of 128 (20 pinned); steady/settings-changed: held out 19 of 81 (19 pinned)
 benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin  # near-empty/settings-quiet  pinned
 benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin  # pre-wrap/settings-changed  pinned
 benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin  # just-wrapped/settings-quiet  pinned
 benign__tbA__nv15s-lab-steady1__run008__20260712T035317.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run012__20260712T063335.bin  # steady/settings-quiet
 benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin  # steady/settings-quiet  pinned
-benign__tbA__nv15s-lab-steady1__run021__20260712T123414.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run024__20260712T143426.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run043__20260713T061311.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run044__20260713T065316.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run047__20260713T085329.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run068__20260714T014056.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run088__20260714T150222.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run092__20260714T195818.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run101__20260715T015858.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run105__20260715T043915.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run031__20260712T221220.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run071__20260714T034108.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-steady1__run089__20260714T154226.bin  # steady/settings-quiet
 benign__tbA__nv15s-lab-steady1__run109__20260715T071932.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab-steady1__run111__20260715T083940.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-tail1__run033__20260718T194641.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run035__20260718T194811.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run037__20260718T194941.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run039__20260718T195111.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run041__20260718T195241.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run043__20260718T195411.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run045__20260718T201941.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run047__20260718T202111.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run049__20260718T202241.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run051__20260718T202411.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run053__20260718T202541.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run054__20260718T202626.bin  # steady/settings-quiet
+benign__tbA__nv15s-lab-tail1__run055__20260718T202711.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run057__20260718T205241.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run059__20260718T205411.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run061__20260718T205541.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run063__20260718T205711.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run065__20260718T205841.bin  # steady/settings-quiet  pinned
+benign__tbA__nv15s-lab-tail1__run067__20260718T210011.bin  # steady/settings-quiet  pinned
 benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin  # steady/settings-quiet  pinned
-benign__tbA__nv15s-lab-top1__run004__20260712T193203.bin  # steady/settings-quiet
-benign__tbA__nv15s-lab2-top1__run003__20260715T165101.bin  # steady/settings-quiet
 benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin  # steady/settings-changed  pinned
 benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin  # steady/settings-changed  pinned
 benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin  # steady/settings-changed  pinned
-benign__tbA__nv15s-lab-steady1__run036__20260713T013241.bin  # steady/settings-changed
-benign__tbA__nv15s-lab-steady1__run052__20260713T121350.bin  # steady/settings-changed
-benign__tbA__nv15s-lab-steady1__run054__20260713T133400.bin  # steady/settings-changed
-benign__tbA__nv15s-lab-steady1__run059__20260713T165423.bin  # steady/settings-changed
-benign__tbA__nv15s-lab-steady1__run060__20260713T202021.bin  # steady/settings-changed
-benign__tbA__nv15s-lab-steady1__run078__20260714T082138.bin  # steady/settings-changed
-benign__tbA__nv15s-lab-steady1__run095__20260714T215832.bin  # steady/settings-changed
+benign__tbA__nv15s-lab-tail1__run001__20260718T181041.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run003__20260718T181211.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run005__20260718T181341.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run007__20260718T181511.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run009__20260718T184041.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run011__20260718T184211.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run013__20260718T184341.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run015__20260718T184511.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run017__20260718T184641.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run019__20260718T184811.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run021__20260718T191341.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run023__20260718T191511.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run025__20260718T191641.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run027__20260718T191811.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run029__20260718T191941.bin  # steady/settings-changed  pinned
+benign__tbA__nv15s-lab-tail1__run031__20260718T192111.bin  # steady/settings-changed  pinned

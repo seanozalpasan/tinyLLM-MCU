@@ -12,10 +12,12 @@ beyond that set, because their captures would carry zero exam coverage. An exist
 list is never overwritten without --force -- a re-split invalidates any model already
 fitted against the old one.
 
---pin forces a name-list's captures (the collaborator's anomaly bases) into the
-holdout: every returned anomaly is a tampered copy of one of them, so the model
-must never have trained on the file under the tampering, or the detection numbers
-carry a memorized-base confound. 'md5=' comments in the pin file are verified
+--pin forces a name-list's captures into the holdout -- any capture that must sit
+in the exam rather than in training qualifies, with the pin file recording each
+name's reason. The founding case is the collaborator's anomaly bases: every
+returned anomaly is a tampered copy of one, so the model must never have trained
+on the file under the tampering, or the detection numbers carry a memorized-base
+confound. 'md5=' comments in the pin file are verified
 against the manifest -- the file being tampered must be byte-for-byte the file
 locked out of training.
 
@@ -166,9 +168,9 @@ def write_holdout(
     ]
     if pinned:
         lines += [
-            "# 'pinned' = a collaborator anomaly base (offdevice/data/collab_bases.txt)",
-            "# forced into the exam: every returned anomaly is a tampered copy of one,",
-            "# and the model must never have trained on the file under the tampering.",
+            "# 'pinned' = a capture the split's --pin list forced into the exam; the",
+            "# pin file records each name's reason (e.g. a collaborator anomaly base",
+            "# the model must never train on, or a deliberately capped subsample).",
         ]
     lines += [
         # Machine-read by read_holdout_variants -- keep the "# variants:" prefix.

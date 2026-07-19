@@ -1,0 +1,67 @@
+# Split --pin input for the session-09 re-fit: every name here is forced into the
+# holdout exam. Read by offdevice/model/split.py (read_name_list); format matches
+# holdout.txt -- bare filename, '#' comment.
+#
+# Two groups, two reasons:
+#
+# 1) The 8 collaborator anomaly BASE captures. offdevice/data/collab_bases.txt
+#    stays the mailed-copy record; the md5s are repeated here so the split keeps
+#    verifying the banked file == the mailed file. Every returned anomaly is a
+#    tampered copy of one of these, so the model must never train on them.
+#
+# 2) 34 of the 69 nv15s-lab-tail1 rare-state captures (the near-full-page corner
+#    collection). The corner's training share is capped at half the collection so
+#    it sits at ~20% of training -- its share of real device time -- instead of
+#    the collection's full weight. Selection rule, fixed before this re-split:
+#    every second capture by run number. The ODD runs (run001..run067) land here
+#    in the exam; the EVEN runs (run000..run068) train. Pinning the unused half
+#    makes it never-trained corner exam data: the direct answer to "did the model
+#    merely memorize the corner captures it trained on?". No md5 comments for
+#    these -- there is no external copy to reconcile; the manifest md5 (re-checked
+#    against file bytes at every load) is the only authority.
+#
+# chosen=2026-07-19  spec=v2  campaign=nv15s-lab-*
+
+benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin    # 36 recs   near-empty    quiet    p0:1       md5=a8b01ca9981c340cca1913aead0a3ddf
+benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin  # 130 recs  steady        quiet    p0:1 p1:1  md5=ca3064e261353c94883ebc10eecd8bc9
+benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin  # 146 recs  steady        changed  p0:1 p1:3  md5=3f5c4f812ba5c14e99d85dee0b454c02
+benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin    # 166 recs  just-wrapped  quiet    p0:1 p1:1  md5=26340f79b1e896dc030e2378b7bf4565
+benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin  # 178 recs  steady        changed  p0:1 p1:4  md5=4cbd47dc2fae55a2faada04dd3d678d8
+benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin    # 216 recs  pre-wrap      changed  p0:3 p1:1  md5=2145d64d9fd4ebf927c1bb57260168a4
+benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin     # 242 recs  steady        quiet    p0:1 p1:1  md5=c9ecf3a0a0e2fc0362e3ec7055c5d56b
+benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin  # 244 recs  steady        changed  p0:2 p1:1  md5=889d2ed80ed4efad01b118532ac814c3
+
+benign__tbA__nv15s-lab-tail1__run001__20260718T181041.bin    # 231 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run003__20260718T181211.bin    # 235 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run005__20260718T181341.bin    # 239 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run007__20260718T181511.bin    # 243 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run009__20260718T184041.bin    # 223 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run011__20260718T184211.bin    # 227 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run013__20260718T184341.bin    # 231 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run015__20260718T184511.bin    # 235 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run017__20260718T184641.bin    # 239 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run019__20260718T184811.bin    # 243 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run021__20260718T191341.bin    # 223 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run023__20260718T191511.bin    # 227 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run025__20260718T191641.bin    # 231 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run027__20260718T191811.bin    # 235 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run029__20260718T191941.bin    # 239 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run031__20260718T192111.bin    # 243 recs  steady  changed  tail corner
+benign__tbA__nv15s-lab-tail1__run033__20260718T194641.bin    # 223 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run035__20260718T194811.bin    # 227 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run037__20260718T194941.bin    # 231 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run039__20260718T195111.bin    # 235 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run041__20260718T195241.bin    # 239 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run043__20260718T195411.bin    # 243 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run045__20260718T201941.bin    # 223 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run047__20260718T202111.bin    # 227 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run049__20260718T202241.bin    # 231 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run051__20260718T202411.bin    # 235 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run053__20260718T202541.bin    # 239 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run055__20260718T202711.bin    # 243 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run057__20260718T205241.bin    # 223 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run059__20260718T205411.bin    # 227 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run061__20260718T205541.bin    # 231 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run063__20260718T205711.bin    # 235 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run065__20260718T205841.bin    # 239 recs  steady  quiet    tail corner
+benign__tbA__nv15s-lab-tail1__run067__20260718T210011.bin    # 243 recs  steady  quiet    tail corner
