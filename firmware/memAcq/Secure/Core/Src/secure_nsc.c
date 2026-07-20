@@ -22,6 +22,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "secure_nsc.h"
+#include "static_hash.h"   /* Part-1 runtime re-check behind the pre-write veneer */
 #include <string.h>     /* for memcmp() */
 
 /* Global variables ----------------------------------------------------------*/
@@ -148,6 +149,18 @@ CMSE_NS_ENTRY ErrorStatus SECURE_print_Buffer(uint32_t * buf, uint32_t size){
 
 CMSE_NS_ENTRY void SECURE_print_Log(char* string){
 	printf(string);
+}
+
+
+/**
+  * @brief  Part-1 IDS pre-write gate: re-hash the static NS region vs the
+  *         golden before the caller appends an NV record. No pointers cross
+  *         the boundary, so no cmse address check is needed.
+  * @retval 0 = clean (caller may write); nonzero = withhold the write
+  */
+CMSE_NS_ENTRY int SECURE_StaticHash_PreWriteCheck(void)
+{
+  return StaticHash_RuntimeCheck();
 }
 
 

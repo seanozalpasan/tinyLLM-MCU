@@ -1,7 +1,7 @@
 {
-  "threshold": 13.87393490800423,
-  "created": "2026-07-16T16:49:41",
-  "n_train": 122,
+  "threshold": 13.217188766753813,
+  "created": "2026-07-19T18:05:24",
+  "n_train": 184,
   "variants": [
     "nv15s-lab-fill1",
     "nv15s-lab-fill2",
@@ -10,499 +10,750 @@
     "nv15s-lab-top2",
     "nv15s-lab-top3",
     "nv15s-lab2-steady1",
-    "nv15s-lab2-top1"
+    "nv15s-lab2-top1",
+    "nv15s-lab-tail1",
+    "nv15s-lab-tail2",
+    "nv15s-lab-tail3-withsettings"
   ],
   "holdout_file": "C:\\Users\\sean\\seanprojects\\tinyLLM-MCU\\offdevice\\data\\holdout.txt",
   "fp_target": 0.02,
-  "shrinkage": 0.04837062441893778,
+  "shrinkage": 0.02602044337270138,
   "loo_distances": [
     [
       "benign__tbA__nv15s-lab-top1__run002__20260712T182821.bin",
-      4.057531
+      4.376413
+    ],
+    [
+      "benign__tbA__nv15s-lab-top1__run004__20260712T193203.bin",
+      4.662965
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run055__20260713T141405.bin",
-      4.525344
+      4.7996
     ],
     [
-      "benign__tbA__nv15s-lab-top2__run003__20260713T190826.bin",
-      4.579845
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run033__20260712T233229.bin",
-      4.642331
-    ],
-    [
-      "benign__tbA__nv15s-lab-fill2__run001__20260711T223241.bin",
-      4.729592
+      "benign__tbA__nv15s-lab-tail1__run048__20260718T202156.bin",
+      4.924125
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run005__20260712T015305.bin",
-      4.79591
-    ],
-    [
-      "benign__tbA__nv15s-lab-top2__run004__20260713T194017.bin",
-      4.970703
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run018__20260712T103401.bin",
-      4.986694
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run009__20260712T043322.bin",
-      5.040341
+      5.056146
     ],
     [
       "benign__tbA__nv15s-lab2-steady1__run001__20260715T180221.bin",
-      5.131681
+      5.146462
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run027__20260712T163439.bin",
-      5.261146
+      "benign__tbA__nv15s-lab-fill2__run001__20260711T223241.bin",
+      5.157927
+    ],
+    [
+      "benign__tbA__nv15s-lab-top2__run003__20260713T190826.bin",
+      5.176721
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run050__20260718T202326.bin",
+      5.217677
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run060__20260718T205456.bin",
+      5.303809
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run046__20260718T202026.bin",
+      5.327363
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run022__20260718T191426.bin",
+      5.360776
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run024__20260718T191556.bin",
+      5.383296
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run009__20260712T043322.bin",
+      5.486942
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run036__20260718T194856.bin",
+      5.594548
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run018__20260712T103401.bin",
+      5.623662
+    ],
+    [
+      "benign__tbA__nv15s-lab-top2__run004__20260713T194017.bin",
+      5.642629
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run038__20260718T195026.bin",
+      5.692029
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run028__20260712T201207.bin",
-      5.349173
+      5.702718
     ],
     [
-      "benign__tbA__nv15s-lab-fill2__run000__20260711T222508.bin",
-      5.434439
+      "benign__tbA__nv15s-lab-steady1__run027__20260712T163439.bin",
+      5.723944
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run039__20260713T033254.bin",
-      5.656829
+      "benign__tbA__nv15s-lab-tail1__run062__20260718T205626.bin",
+      5.765733
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run090__20260714T162231.bin",
-      5.697455
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run100__20260715T011854.bin",
-      5.719762
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run072__20260714T042112.bin",
-      5.746742
+      "benign__tbA__nv15s-lab-tail1__run034__20260718T194726.bin",
+      5.789305
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run015__20260712T083348.bin",
-      5.753058
+      5.815435
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run039__20260713T033254.bin",
+      5.840101
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run100__20260715T011854.bin",
+      5.860947
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run012__20260718T184256.bin",
+      5.891562
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run090__20260714T162231.bin",
+      5.93484
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run026__20260718T191726.bin",
+      5.964593
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run010__20260718T184126.bin",
+      5.965032
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run004__20260712T011301.bin",
-      5.811306
+      6.095442
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run002__20260711T235252.bin",
-      5.856064
+      6.126739
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run071__20260714T034108.bin",
-      5.864957
+      "benign__tbA__nv15s-lab-fill2__run000__20260711T222508.bin",
+      6.137988
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run058__20260718T205326.bin",
+      6.195736
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run046__20260713T081324.bin",
-      5.968956
+      6.269557
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run094__20260714T211827.bin",
-      5.991526
+      "benign__tbA__nv15s-lab-tail1__run002__20260718T181126.bin",
+      6.27566
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run083__20260714T114200.bin",
-      6.073476
+      "benign__tbA__nv15s-lab-steady1__run092__20260714T195818.bin",
+      6.300452
     ],
     [
-      "benign__tbA__nv15s-lab2-top1__run004__20260715T172216.bin",
-      6.10934
+      "benign__tbA__nv15s-lab-steady1__run036__20260713T013241.bin",
+      6.304457
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run112__20260715T091945.bin",
-      6.150485
+      "benign__tbA__nv15s-lab-steady1__run044__20260713T065316.bin",
+      6.322272
     ],
     [
-      "benign__tbA__nv15s-lab-top1__run003__20260712T190012.bin",
-      6.16452
+      "benign__tbA__nv15s-lab-steady1__run043__20260713T061311.bin",
+      6.408441
     ],
     [
-      "benign__tbA__nv15s-lab-fill1__run002__20260711T212346.bin",
-      6.175805
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run019__20260712T111405.bin",
-      6.202569
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run013__20260712T071339.bin",
-      6.223874
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run073__20260714T050117.bin",
-      6.251933
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run006__20260712T023309.bin",
-      6.313427
+      "benign__tbA__nv15s-lab-steady1__run072__20260714T042112.bin",
+      6.411853
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run035__20260713T005237.bin",
-      6.397339
+      6.419887
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run056__20260713T145409.bin",
-      6.439662
+      "benign__tbA__nv15s-lab-tail1__run052__20260718T202456.bin",
+      6.425706
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run019__20260712T111405.bin",
+      6.428354
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run071__20260714T034108.bin",
+      6.457976
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run083__20260714T114200.bin",
+      6.461608
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run021__20260712T123414.bin",
+      6.515635
+    ],
+    [
+      "benign__tbA__nv15s-lab-top1__run003__20260712T190012.bin",
+      6.527916
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run112__20260715T091945.bin",
+      6.534107
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run014__20260718T184426.bin",
+      6.539653
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run054__20260718T202626.bin",
+      6.583311
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run111__20260715T083940.bin",
+      6.664101
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run031__20260712T221220.bin",
-      6.504846
+      6.700998
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run051__20260713T113346.bin",
-      6.53455
+      "benign__tbA__nv15s-lab-fill1__run002__20260711T212346.bin",
+      6.741325
     ],
     [
-      "benign__tbA__nv15s-lab-fill1__run004__20260711T214152.bin",
-      6.539981
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run016__20260712T091352.bin",
-      6.560261
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run093__20260714T203823.bin",
-      6.562952
-    ],
-    [
-      "benign__tbA__nv15s-lab-fill1__run005__20260711T215055.bin",
-      6.574984
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run077__20260714T074133.bin",
-      6.655099
-    ],
-    [
-      "benign__tbA__nv15s-lab-top3__run004__20260714T191814.bin",
-      6.737277
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run010__20260712T051326.bin",
-      6.802995
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run066__20260714T002047.bin",
-      6.878645
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run029__20260712T205212.bin",
-      6.883204
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run042__20260713T053307.bin",
-      6.917829
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run087__20260714T142217.bin",
-      6.927013
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run075__20260714T062125.bin",
-      6.9866
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run011__20260712T055330.bin",
-      7.001389
+      "benign__tbA__nv15s-lab-steady1__run056__20260713T145409.bin",
+      6.759056
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run113__20260715T095950.bin",
-      7.013533
+      6.762349
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run048__20260713T093333.bin",
-      7.078163
+      "benign__tbA__nv15s-lab-steady1__run006__20260712T023309.bin",
+      6.772898
+    ],
+    [
+      "benign__tbA__nv15s-lab2-top1__run004__20260715T172216.bin",
+      6.773702
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run013__20260712T071339.bin",
+      6.782026
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run093__20260714T203823.bin",
+      6.857617
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run018__20260718T184726.bin",
+      6.882787
+    ],
+    [
+      "benign__tbA__nv15s-lab-top3__run004__20260714T191814.bin",
+      6.900653
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run010__20260712T051326.bin",
+      6.920548
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run073__20260714T050117.bin",
+      6.977331
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run051__20260713T113346.bin",
+      6.985298
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run016__20260718T184556.bin",
+      7.015831
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run077__20260714T074133.bin",
+      7.043055
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run064__20260718T205756.bin",
+      7.154414
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run052__20260713T121350.bin",
+      7.234449
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run040__20260718T195156.bin",
+      7.259866
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run060__20260713T202021.bin",
+      7.268482
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run091__20260714T170235.bin",
-      7.19795
+      7.270359
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run040__20260713T041258.bin",
-      7.220594
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run118__20260715T132013.bin",
-      7.242688
-    ],
-    [
-      "benign__tbA__nv15s-lab2-steady1__run000__20260715T150546.bin",
-      7.304287
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run038__20260713T025250.bin",
-      7.306962
-    ],
-    [
-      "benign__tbA__nv15s-lab-top2__run002__20260713T183635.bin",
-      7.328006
-    ],
-    [
-      "benign__tbA__nv15s-lab-top3__run002__20260714T181432.bin",
-      7.331678
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run117__20260715T124009.bin",
-      7.376997
-    ],
-    [
-      "benign__tbA__nv15s-lab-top1__run001__20260712T175630.bin",
-      7.402164
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run063__20260713T222034.bin",
-      7.413394
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run022__20260712T131418.bin",
-      7.424614
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run081__20260714T102151.bin",
-      7.444897
+      "benign__tbA__nv15s-lab-tail1__run000__20260718T180957.bin",
+      7.277005
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run099__20260715T003849.bin",
-      7.598816
+      7.285065
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run082__20260714T110156.bin",
-      7.616677
+      "benign__tbA__nv15s-lab-tail1__run030__20260718T192026.bin",
+      7.311252
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run078__20260714T082138.bin",
+      7.342934
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run029__20260712T205212.bin",
+      7.343091
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run047__20260713T085329.bin",
+      7.361145
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run016__20260712T091352.bin",
+      7.377838
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run000__20260719T123138.bin",
+      7.419761
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run066__20260714T002047.bin",
+      7.444193
+    ],
+    [
+      "benign__tbA__nv15s-lab2-steady1__run000__20260715T150546.bin",
+      7.450328
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run109__20260715T071932.bin",
+      7.461029
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run020__20260718T184856.bin",
+      7.462784
+    ],
+    [
+      "benign__tbA__nv15s-lab-fill1__run004__20260711T214152.bin",
+      7.49284
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run011__20260712T055330.bin",
+      7.527707
+    ],
+    [
+      "benign__tbA__nv15s-lab-fill1__run005__20260711T215055.bin",
+      7.549487
     ],
     [
       "benign__tbA__nv15s-lab-fill1__run003__20260711T213249.bin",
-      7.617149
+      7.550611
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run069__20260714T022100.bin",
-      7.662552
+      "benign__tbA__nv15s-lab-steady1__run042__20260713T053307.bin",
+      7.554116
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run089__20260714T154226.bin",
-      7.787372
+      "benign__tbA__nv15s-lab-steady1__run038__20260713T025250.bin",
+      7.60352
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run074__20260714T054121.bin",
-      7.998282
+      "benign__tbA__nv15s-lab-steady1__run012__20260712T063335.bin",
+      7.619925
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run028__20260718T191856.bin",
+      7.644136
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run008__20260718T181556.bin",
+      7.654671
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run088__20260714T150222.bin",
+      7.690088
+    ],
+    [
+      "benign__tbA__nv15s-lab-top2__run002__20260713T183635.bin",
+      7.699339
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run087__20260714T142217.bin",
+      7.703504
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run118__20260715T132013.bin",
+      7.786651
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run048__20260713T093333.bin",
+      7.815683
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run081__20260714T102151.bin",
+      7.842663
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run020__20260712T115409.bin",
-      8.000901
+      7.847813
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run040__20260713T041258.bin",
+      7.857808
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run069__20260714T022100.bin",
+      7.863677
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run063__20260713T222034.bin",
+      7.883583
+    ],
+    [
+      "benign__tbA__nv15s-lab-top1__run001__20260712T175630.bin",
+      7.898813
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run004__20260718T181256.bin",
+      7.945619
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run022__20260712T131418.bin",
+      7.978446
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run068__20260714T014056.bin",
+      7.979089
+    ],
+    [
+      "benign__tbA__nv15s-lab-top3__run002__20260714T181432.bin",
+      8.018159
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run006__20260718T181426.bin",
+      8.091934
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run034__20260713T001233.bin",
-      8.009116
+      8.209519
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run057__20260713T153413.bin",
-      8.081205
+      "benign__tbA__nv15s-lab-steady1__run082__20260714T110156.bin",
+      8.219285
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run049__20260713T101337.bin",
-      8.092835
+      "benign__tbA__nv15s-lab-steady1__run089__20260714T154226.bin",
+      8.234768
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run084__20260714T122204.bin",
-      8.139347
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run065__20260713T234043.bin",
-      8.185666
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run058__20260713T161418.bin",
-      8.213235
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run085__20260714T130209.bin",
-      8.21732
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run041__20260713T045302.bin",
-      8.281833
+      "benign__tbA__nv15s-lab-steady1__run075__20260714T062125.bin",
+      8.298227
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run053__20260713T125354.bin",
-      8.346652
+      8.339138
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run097__20260714T231841.bin",
-      8.367151
+      "benign__tbA__nv15s-lab-tail1__run044__20260718T195456.bin",
+      8.349843
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run108__20260715T063927.bin",
-      8.440997
+      "benign__tbA__nv15s-lab-steady1__run065__20260713T234043.bin",
+      8.351698
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run058__20260713T161418.bin",
+      8.357515
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run120__20260715T144022.bin",
-      8.532424
+      8.381199
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run107__20260715T055923.bin",
-      8.567231
+      "benign__tbA__nv15s-lab-tail1__run032__20260718T192156.bin",
+      8.383947
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run001__20260711T231248.bin",
-      8.568339
+      "benign__tbA__nv15s-lab-tail1__run042__20260718T195326.bin",
+      8.487972
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run086__20260714T134213.bin",
-      8.67183
+      "benign__tbA__nv15s-lab-steady1__run057__20260713T153413.bin",
+      8.488572
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run079__20260714T090142.bin",
-      8.681348
+      8.513884
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run032__20260712T225224.bin",
-      8.71133
+      "benign__tbA__nv15s-lab-steady1__run097__20260714T231841.bin",
+      8.532487
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run017__20260712T095357.bin",
-      8.774795
+      "benign__tbA__nv15s-lab-steady1__run084__20260714T122204.bin",
+      8.539019
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run025__20260712T151430.bin",
-      8.845089
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run119__20260715T140017.bin",
-      8.849023
+      "benign__tbA__nv15s-lab-steady1__run085__20260714T130209.bin",
+      8.576913
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run115__20260715T111959.bin",
-      8.892777
+      8.652615
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run070__20260714T030104.bin",
-      8.917325
+      "benign__tbA__nv15s-lab-steady1__run032__20260712T225224.bin",
+      8.673684
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run106__20260715T051919.bin",
-      8.971012
+      "benign__tbA__nv15s-lab-steady1__run049__20260713T101337.bin",
+      8.756629
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run103__20260715T031906.bin",
-      8.996896
+      "benign__tbA__nv15s-lab-steady1__run107__20260715T055923.bin",
+      8.888628
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run007__20260712T031313.bin",
-      9.035593
+      "benign__tbA__nv15s-lab-tail3-withsettings__run000__20260719T163713.bin",
+      8.929839
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run080__20260714T094146.bin",
-      9.043392
-    ],
-    [
-      "benign__tbA__nv15s-lab-fill1__run007__20260711T220901.bin",
-      9.131533
+      "benign__tbA__nv15s-lab-steady1__run095__20260714T215832.bin",
+      8.934893
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run076__20260714T070129.bin",
-      9.342482
+      8.981191
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run110__20260715T075936.bin",
-      9.352268
+      "benign__tbA__nv15s-lab-steady1__run041__20260713T045302.bin",
+      8.987124
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run045__20260713T073320.bin",
-      9.644998
+      "benign__tbA__nv15s-lab-steady1__run086__20260714T134213.bin",
+      8.99361
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run062__20260713T214030.bin",
-      9.72902
+      "benign__tbA__nv15s-lab-steady1__run108__20260715T063927.bin",
+      9.005675
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run101__20260715T015858.bin",
+      9.08751
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run103__20260715T031906.bin",
+      9.163836
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run066__20260718T205926.bin",
+      9.175677
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run070__20260714T030104.bin",
+      9.227081
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run059__20260713T165423.bin",
+      9.254643
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run025__20260712T151430.bin",
+      9.27889
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run001__20260711T231248.bin",
+      9.300895
+    ],
+    [
+      "benign__tbA__nv15s-lab2-top1__run003__20260715T165101.bin",
+      9.395179
+    ],
+    [
+      "benign__tbA__nv15s-lab-fill1__run007__20260711T220901.bin",
+      9.396601
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run114__20260715T103955.bin",
-      9.796731
+      9.398048
     ],
     [
-      "benign__tbA__nv15s-lab-top2__run001__20260713T180444.bin",
-      9.984249
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run037__20260713T021245.bin",
-      9.98856
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run116__20260715T120005.bin",
-      9.994577
-    ],
-    [
-      "benign__tbA__nv15s-lab-top3__run000__20260714T171050.bin",
-      10.017704
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run064__20260713T230039.bin",
-      10.02712
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run098__20260714T235845.bin",
-      10.075401
+      "benign__tbA__nv15s-lab-steady1__run106__20260715T051919.bin",
+      9.458219
     ],
     [
       "benign__tbA__nv15s-lab2-top1__run000__20260715T151831.bin",
-      10.116737
+      9.467192
     ],
     [
-      "benign__tbA__nv15s-lab-steady1__run096__20260714T223837.bin",
-      10.185565
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run023__20260712T135422.bin",
-      10.204866
-    ],
-    [
-      "benign__tbA__nv15s-lab-fill1__run000__20260711T210539.bin",
-      10.746218
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run050__20260713T105342.bin",
-      11.215251
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run061__20260713T210026.bin",
-      11.249886
-    ],
-    [
-      "benign__tbA__nv15s-lab-top3__run001__20260714T174241.bin",
-      11.426302
-    ],
-    [
-      "benign__tbA__nv15s-lab-top2__run000__20260713T173253.bin",
-      11.480111
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run102__20260715T023902.bin",
-      11.745108
+      "benign__tbA__nv15s-lab-steady1__run054__20260713T133400.bin",
+      9.605228
     ],
     [
       "benign__tbA__nv15s-lab2-top1__run001__20260715T154931.bin",
-      11.745729
+      9.605533
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run045__20260713T073320.bin",
+      9.612475
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run119__20260715T140017.bin",
+      9.637384
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run110__20260715T075936.bin",
+      9.665946
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run080__20260714T094146.bin",
+      9.802034
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run007__20260712T031313.bin",
+      10.049759
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run105__20260715T043915.bin",
+      10.212017
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run007__20260719T161952.bin",
+      10.253208
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run024__20260712T143426.bin",
+      10.308402
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run023__20260712T135422.bin",
+      10.428147
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run064__20260713T230039.bin",
+      10.436211
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run098__20260714T235845.bin",
+      10.476369
+    ],
+    [
+      "benign__tbA__nv15s-lab-top2__run001__20260713T180444.bin",
+      10.582408
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run050__20260713T105342.bin",
+      10.733996
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run037__20260713T021245.bin",
+      10.780701
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run116__20260715T120005.bin",
+      10.836068
+    ],
+    [
+      "benign__tbA__nv15s-lab-top2__run000__20260713T173253.bin",
+      10.854222
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run005__20260719T152007.bin",
+      10.868129
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run096__20260714T223837.bin",
+      10.877106
+    ],
+    [
+      "benign__tbA__nv15s-lab-top3__run000__20260714T171050.bin",
+      11.047316
+    ],
+    [
+      "benign__tbA__nv15s-lab-fill1__run000__20260711T210539.bin",
+      11.052453
+    ],
+    [
+      "benign__tbA__nv15s-lab-top3__run001__20260714T174241.bin",
+      11.098481
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run061__20260713T210026.bin",
+      11.130313
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run062__20260713T214030.bin",
+      11.189383
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run002__20260719T134952.bin",
+      11.275696
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run004__20260719T144923.bin",
+      11.382883
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run102__20260715T023902.bin",
+      11.44792
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run001__20260719T131937.bin",
+      11.547398
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run003__20260719T142007.bin",
+      11.731508
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail3-withsettings__run001__20260719T172028.bin",
+      11.96262
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail1__run056__20260718T202756.bin",
+      12.859966
     ],
     [
       "benign__tbA__nv15s-lab-steady1__run067__20260714T010051.bin",
-      12.15737
+      12.93442
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail3-withsettings__run002__20260719T175058.bin",
+      13.128453
+    ],
+    [
+      "benign__tbA__nv15s-lab-tail2__run006__20260719T155022.bin",
+      13.217189
     ],
     [
       "benign__tbA__nv15s-lab-top3__run003__20260714T184623.bin",
-      13.873935
-    ],
-    [
-      "benign__tbA__nv15s-lab-steady1__run104__20260715T035911.bin",
-      15.870739
+      13.464598
     ],
     [
       "benign__tbA__nv15s-lab2-top1__run002__20260715T162016.bin",
-      16.360114
+      13.887506
+    ],
+    [
+      "benign__tbA__nv15s-lab-steady1__run104__20260715T035911.bin",
+      17.012928
     ]
   ],
   "score": "d(x) = sqrt((x-mean)^T precision (x-mean)); anomaly if d > threshold",

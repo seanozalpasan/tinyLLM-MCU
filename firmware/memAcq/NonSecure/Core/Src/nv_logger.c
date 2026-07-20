@@ -12,7 +12,7 @@
  *
  * A failed sensor read SKIPS its record (nothing is written, the cadence
  * holds) rather than logging garbage -- an out-of-range record would trip
- * the training data's benign gate and cost a whole capture.
+ * the training data's benign gate and cost a whole capture. *
  *
  * The settings journal persists the display units (B2 presses): page-open
  * stamps J0 from RAM, each runtime change programs the next blank slot, and
@@ -194,7 +194,7 @@ static int settings_toggle(int which)
   }
   if (s_journal_used >= NV_JOURNAL_SLOTS)
   {
-    SECURE_print_Log("[NVSET] refused: journal full until next page rotation\r\n");
+    SECURE_print_Log("[NVSET] REFUSED!: journal full until next page rotation\r\n");
     return -1;
   }
 
@@ -524,6 +524,18 @@ int NvLogger_Poll(NvReading *out)
   /* u32 modular subtraction stays correct across the raw-tick wrap. */
   if ((now - s_last_ms) < (NV_LOGGER_PERIOD_S * 1000u)) { return 0; }
   s_last_ms = now;
+
+  /* Part-1 pre-write gate: the static CODE region must re-prove clean before
+     this image appends anything to NV -- a tampered image is caught at its
+     first write attempt, not at the next periodic scan. Sits before the
+     sensor read so a withheld record perturbs nothing (no stats, no page
+     turn). The secure side latches its own verdict; the reset arrives via
+     the watchdog whether or not this loop keeps polling. */
+  if (SECURE_StaticHash_PreWriteCheck() != 0)
+  {
+    SECURE_print_Log("[NVLOG] record withheld: static-region check not clean\r\n");
+    return 0;
+  }
 
   /* Order is the spec's: reading -> stats -> (page-open if needed, stamping a
      header that already includes this reading) -> program the record. A failed

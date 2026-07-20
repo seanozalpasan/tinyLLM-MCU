@@ -42,6 +42,14 @@ typedef enum
 void SECURE_RegisterCallback(SECURE_CallbackIDTypeDef CallbackId, void *func);
 
 void SECURE_print_Log(char* string);
+
+/* Part-1 IDS pre-write gate: re-hash the static NS region against the golden
+   digest. The logger MUST call this before every NV record write and skip the
+   write unless it returns 0 -- no record is appended by an image that has not
+   just re-proven its integrity. 0 = clean; nonzero = mismatch or check
+   failure (the mismatch also latches the secure watchdog gate dirty, so the
+   board resets within one scan period regardless of what the caller does). */
+int SECURE_StaticHash_PreWriteCheck(void);
 ErrorStatus SECURE_DMA_Fetch_NonSecure_Mem(uint32_t *nsc_mem_buffer, uint32_t Size, void *pCallback);
 ErrorStatus SECURE_DATA_Last_Buffer_Compare(uint32_t* addr);
 ErrorStatus SECURE_print_Buffer(uint32_t * buf, uint32_t size);

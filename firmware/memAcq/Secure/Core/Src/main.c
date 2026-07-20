@@ -26,6 +26,8 @@
 #include "static_hash.h"   /* Part-1 IDS: static NS-region SHA-256 vs golden */
 #include "nv_features.h"   /* Part-2 IDS: NV-region features (parity harness for now) */
 #include "ospi_hash.h"     /* OSPI XIP weight-blob attestation (compile-time golden) */
+#include "nv_model_parity.h"   /* Part-2 IDS: model parity gate (b) harness */
+#include "ids_scan.h"      /* Part-2 IDS: the secure periodic scan tick */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -229,6 +231,13 @@ int main(void)
   NvFeatures_ParityPrint();
 #endif
 
+#if NV_MODEL_PARITY
+  /* Parity gate (b): score the exported model test vectors on-chip and print
+     the raw results; offdevice/model/parity_check.py grades them against the
+     export's references on the laptop. */
+  NvModelParity_Print();
+#endif
+
 #if OSPI_XIP_BRINGUP
   /* Bring up OSPI XIP at 0x90000000. Must run before HAL_SuspendTick() (it uses HAL_Delay).
      Leaves OCTOSPI1 in memory-mapped mode so the non-secure world can read it after the jump. */
@@ -255,6 +264,11 @@ int main(void)
 #elif DUMP_NSFLASH == 2
     Dump_NSFlash_BootWindow(&huart1);   /* one capture chance at boot, then the normal NS jump */
 #endif
+
+  /* Part-2 IDS: arm the secure scan tick last thing before the NonSecure
+     jump -- after the dump window, so captures still snapshot a ring no scan
+     has raced. First scan fires one full period into NonSecure execution. */
+  IdsScan_Init();
 
     HAL_SuspendTick();
   /* USER CODE END 2 */
@@ -1162,8 +1176,14 @@ static void OSPI_XIP_SelfTest(void)
 /* USER CODE BEGIN 4 */
 PUTCHAR_PROTOTYPE
 {
-  /* Retarget printf to USART1 (blocking). */
-  HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
+  /* Retarget printf to USART1 by direct register write. GOTCHA: the HAL path
+     REFUSES (returns busy, char silently dropped) when the scan interrupt
+     prints while a NonSecure veneer print holds the UART lock -- whole
+     console lines could vanish, and the one line that must never vanish is
+     the ANOMALY verdict. Spinning on TX-FIFO-space then writing cannot drop
+     a byte; the worst case is two interleaved (garbled but present) lines. */
+  while ((USART1->ISR & USART_ISR_TXE_TXFNF) == 0u) { }
+  USART1->TDR = (uint8_t)ch;
 
   return ch;
 }
