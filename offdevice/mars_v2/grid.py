@@ -1,24 +1,21 @@
-"""V2 record grid: nv_grid with the finding-2/4/9 encoding fixes.
+"""
+This turns the 4 KB NV region into a (244, 5) grid the CNN can look at.
+One row per record slot, five columns: ts_delta, temp, hum, press, present.
 
-Same (RECORDS_TOTAL, 5) shape and channel normalization as V1's nv_grid, so the
-frozen AE architecture is unchanged. Three encoding changes:
+How the timestamp column works: records store seconds since boot, so a reboot
+makes the timestamp start over which is normal, not tampering. 
 
-  ts_delta (finding 2 + 9): V1 clipped every backwards step to -2.0, making the
-      benign boot-reset seam byte-identical to a mid-stream regression, and
-      clipped forward gaps at 4.0, saturating a 10000 s gap to the same value as
-      a benign missed-sample gap. V2 encodes:
-        - benign seam (non-increasing ts, landing <= LANDING_LIMIT_S)  -> -1.0
-        - mid-stream regression (landing beyond the seam window)       -> -2.0
-        - forward gaps: dt/PERIOD up to 4, then log-compressed
-          4 + log2(dt/4), capped at 8 -- large gaps stay visible and ordered
-          instead of aliasing onto the benign ceiling.
+The encoding keeps the two cases apart:
+    -   a backwards step that lands at or under 30 s  -> -1.0 (normal reboot seam)
+    -   a backwards step that lands anywhere else     -> -2.0 (someone rewrote time)
+    -   forward gaps count up linearly to 4 periods, then get log-compressed and
+        capped at 8, so a huge gap still stands out instead of blending in
 
-  torn records (finding 4): a torn-shaped record tolerated by the V2 rules
-      (mid-write reset: hum+press erased, position attributable) carries its
-      previous record's hum/press forward instead of the raw 0xFFFFFFFF, which
-      would otherwise normalize to ~4e5 and dominate reconstruction error --
-      the AE must not re-introduce the false positive the rules just fixed.
-      A NON-tolerated torn-shaped record keeps its raw values: visible anomaly.
+Torn records: if the device resets in the middle of writing a record, the
+second half (hum + press) reads erased. When the torn slot sits where a reset
+can actually leave it, we carry the previous record's values forward so the
+model does not panic over normal wear. A torn slot anywhere else keeps its raw
+erased values and stays visible as suspicious.
 """
 from __future__ import annotations
 
@@ -27,102 +24,106 @@ import numpy as np
 from offdevice.nv import spec
 from offdevice.nv.parse import PageView, parse_region, slice_nv
 
-GRID_ROWS = spec.RECORDS_TOTAL          # 244
+GRID_ROWS = spec.RECORDS_TOTAL          # 244 record slots across both pages
 GRID_COLS = 5                           # ts_delta, temp, hum, press, present
 GRID_SHAPE = (GRID_ROWS, GRID_COLS)
 
-_PERIOD = spec.RATE_DEPLOY_PERIOD_S     # 15 s
+_PERIOD = spec.RATE_DEPLOY_PERIOD_S     # 15 s between records
 _DT_KNEE = 4.0                          # linear up to here, log-compressed above
 _DT_CAP = 8.0
-_SEAM = -1.0                            # benign boot-reset landing
-_REGRESSION = -2.0                      # mid-stream non-increasing step
+_SEAM = -1.0                            # normal reboot landing
+_REGRESSION = -2.0                      # rewritten / backwards time
 
-# Boot-seam landing window: the first record after a reboot carries ts ~= PERIOD
-# (the logger's first sample fires one period after boot); the slack absorbs
-# boot/sensor warm-up. Benign landings in the 153-capture bank are all exactly
-# 15; the one real mid-stream regression lands at 2131.
-LANDING_LIMIT_S = spec.RATE_DEPLOY_PERIOD_S * 2   # 30
+# The first record after a reboot carries ts of about one period (the logger's
+# first sample fires one period after boot); doubling it gives slack for boot
+# and sensor warm-up. Every normal reboot in our capture bank lands at exactly
+# 15 s; the one real tampered timestamp we have landed at 2131 s.
+LANDING_LIMIT_S = spec.RATE_DEPLOY_PERIOD_S * 2   # 30 s
 
 _ERASED_U32 = int.from_bytes(bytes([spec.ERASED_BYTE]) * 4, "little")
 
 
-def _is_torn_shaped(rec: dict[str, int]) -> bool:
-    """Both fields of the record's second doubleword read erased."""
-    return rec["hum"] == _ERASED_U32 and rec["press"] == _ERASED_U32
+def _is_torn_shaped(record: dict[str, int]) -> bool:
+    """True when the record's second half (hum + press) reads erased."""
+    return record["hum"] == _ERASED_U32 and record["press"] == _ERASED_U32
 
 
-def _torn_tolerated(page_recs: tuple[dict[str, int], ...], i: int) -> bool:
-    """Torn-shaped record i of one page is attributable to a mid-write reset.
+def _torn_tolerated(page_records: tuple[dict[str, int], ...],
+                    slot_index: int) -> bool:
+    """Is this torn record explainable by a reset during the write?
 
-    The intact first doubleword must be plausible (temp in range) and the slot
-    must sit where a reset can leave it: the last written slot of its page, or
-    immediately before a boot-reset landing. Consecutive torn slots chain
-    naturally: each is followed by a torn/seam successor or the page end.
+    The intact first half has to look plausible (temp in range), and the slot
+    has to sit where a reset can actually leave one: the last written slot of
+    the page, or right before a reboot landing. Back-to-back torn slots chain
+    naturally: each one is followed by another torn slot, a reboot seam, or
+    the end of the page.
     """
-    rec = page_recs[i]
-    temp_ch = spec.CHANNELS[0]
-    if not (temp_ch.lo <= rec["temp"] <= temp_ch.hi):
+    record = page_records[slot_index]
+    temp_channel = spec.CHANNELS[0]
+    if not (temp_channel.lo <= record["temp"] <= temp_channel.hi):
         return False
-    if i == len(page_recs) - 1:
+    if slot_index == len(page_records) - 1:
         return True
-    nxt = page_recs[i + 1]
-    return _is_torn_shaped(nxt) or nxt["ts"] <= LANDING_LIMIT_S
+    next_record = page_records[slot_index + 1]
+    return _is_torn_shaped(next_record) or next_record["ts"] <= LANDING_LIMIT_S
 
 
 def _page_torn_map(page: PageView) -> tuple[bool, ...]:
-    """Per record of one page: True = torn-shaped AND tolerated (benign)."""
+    """Per record of one page: True = torn AND explainable by a reset (benign)."""
     return tuple(
-        _is_torn_shaped(r) and _torn_tolerated(page.records, i)
-        for i, r in enumerate(page.records)
+        _is_torn_shaped(record) and _torn_tolerated(page.records, slot_index)
+        for slot_index, record in enumerate(page.records)
     )
 
 
-def _encode_dt(ts: int, prev_ts: int | None) -> float:
-    if prev_ts is None:
+def _encode_dt(timestamp: int, previous_timestamp: int | None) -> float:
+    if previous_timestamp is None:
         return 1.0
-    dt = (ts - prev_ts) / _PERIOD
-    if dt <= 0.0:
-        return _SEAM if ts <= LANDING_LIMIT_S else _REGRESSION
-    if dt <= _DT_KNEE:
-        return float(dt)
-    return float(min(_DT_KNEE + np.log2(dt / _DT_KNEE), _DT_CAP))
+    delta = (timestamp - previous_timestamp) / _PERIOD
+    if delta <= 0.0:
+        return _SEAM if timestamp <= LANDING_LIMIT_S else _REGRESSION
+    if delta <= _DT_KNEE:
+        return float(delta)
+    return float(min(_DT_KNEE + np.log2(delta / _DT_KNEE), _DT_CAP))
 
 
 def nv_grid_v2(nv: bytes) -> np.ndarray:
-    """4 KB NV region (or full 256 KB dump) -> (RECORDS_TOTAL, 5) float32 grid."""
+    """4 KB NV region (or full 256 KB dump) -> (244, 5) float32 grid."""
     if len(nv) == spec.DUMP_OFFSET + spec.REGION_SIZE:
         nv = slice_nv(nv)
     view = parse_region(nv)
 
-    ordered: list[tuple[dict[str, int], bool]] = []
+    # records oldest-first: the older page's records, then the current page's
+    records_in_order: list[tuple[dict[str, int], bool]] = []
     if view.current is not None:
         other = 1 - view.current
         pages = ([view.pages[other]] if view.pages[other].header is not None else [])
         pages.append(view.pages[view.current])
         for page in pages:
-            ordered.extend(zip(page.records, _page_torn_map(page)))
+            records_in_order.extend(zip(page.records, _page_torn_map(page)))
 
     grid = np.zeros(GRID_SHAPE, dtype=np.float32)
-    ch = {c.name: c for c in spec.CHANNELS}
+    channel_by_name = {channel.name: channel for channel in spec.CHANNELS}
 
-    def norm(v: float, c) -> float:
-        return (v - c.lo) / (c.hi - c.lo)
+    def normalize(value: float, channel) -> float:
+        return (value - channel.lo) / (channel.hi - channel.lo)
 
-    prev_ts: int | None = None
-    prev_hum: float | None = None
-    prev_press: float | None = None
-    for i, (r, tolerated) in enumerate(ordered[:GRID_ROWS]):
-        grid[i, 0] = _encode_dt(r["ts"], prev_ts)
-        prev_ts = r["ts"]
-        grid[i, 1] = norm(r["temp"], ch["temp"])
-        if _is_torn_shaped(r) and tolerated:
-            # carry the neighborhood forward: channels are smooth at 15 s cadence,
-            # so the previous values are reconstruction-friendly stand-ins
-            grid[i, 2] = prev_hum if prev_hum is not None else 0.5
-            grid[i, 3] = prev_press if prev_press is not None else 0.5
+    previous_timestamp: int | None = None
+    previous_humidity: float | None = None
+    previous_pressure: float | None = None
+    for row, (record, tolerated) in enumerate(records_in_order[:GRID_ROWS]):
+        grid[row, 0] = _encode_dt(record["ts"], previous_timestamp)
+        previous_timestamp = record["ts"]
+        grid[row, 1] = normalize(record["temp"], channel_by_name["temp"])
+        if _is_torn_shaped(record) and tolerated:
+            # carry the neighborhood forward: readings are smooth at a 15 s
+            # cadence, so the previous values are believable stand-ins
+            grid[row, 2] = previous_humidity if previous_humidity is not None else 0.5
+            grid[row, 3] = previous_pressure if previous_pressure is not None else 0.5
         else:
-            grid[i, 2] = norm(r["hum"], ch["hum"])
-            grid[i, 3] = norm(r["press"], ch["press"])
-        prev_hum, prev_press = float(grid[i, 2]), float(grid[i, 3])
-        grid[i, 4] = 1.0
+            grid[row, 2] = normalize(record["hum"], channel_by_name["hum"])
+            grid[row, 3] = normalize(record["press"], channel_by_name["press"])
+        previous_humidity = float(grid[row, 2])
+        previous_pressure = float(grid[row, 3])
+        grid[row, 4] = 1.0
     return grid

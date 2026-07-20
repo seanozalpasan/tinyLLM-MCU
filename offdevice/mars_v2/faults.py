@@ -1,17 +1,16 @@
-# Ported from offdevice/exam/gen_faults.py (branch CNN, 2026-07-20) so mars_v2
-# carries no exam code dependency; the exam's battery CLI stays where it is.
-"""Benign operational faults: field states the DEVICE ITSELF can produce.
+"""
+Benign operational faults: field states the DEVICE ITSELF can produce.
 
 Used as benign training examples (fill/fault hardening) -- expected verdict is
 benign for every kind; flagging one is a false positive.
 
-  torn_tail        reset inside the last record's program window: hum+press
-                   read erased, ts/temp intact
-  torn_before_seam same tear, but mid-page with a boot-reset landing after it
-  mid_write_gap    the OLDER page's final record torn, newer page continues
-  fresh_page_open  snapshot right after page-open: header + J0, zero records
-  mid_open_reset   reset between header program and J0 program: header valid,
-                   journal fully blank, zero records
+  torn_tail        -> reset inside the last record's program window: hum+press
+                      read erased, ts/temp intact
+  torn_before_seam -> same tear, but mid-page with a boot-reset landing after it
+  mid_write_gap    -> the OLDER page's final record torn, newer page continues
+  fresh_page_open  -> snapshot right after page-open: header + J0, zero records
+  mid_open_reset   -> reset between header program and J0 program: header valid,
+                      journal fully blank, zero records
 """
 from __future__ import annotations
 

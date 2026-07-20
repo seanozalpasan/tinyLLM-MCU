@@ -1,8 +1,10 @@
-"""Score capture files with a mars_v2 model.
+"""
+Score capture files with a mars_v2 model. With no options this uses the
+packaged weights + calibrated threshold (weights/mars_v2.json), so it works
+out of the box:
 
     python -m offdevice.mars_v2.score <capture.bin> [...]
         [--model path.keras] [--thr 0.4062]
-
 """
 from __future__ import annotations
 
@@ -17,32 +19,37 @@ from .grid import nv_grid_v2
 from .paths import META_JSON
 
 
-def score_files(paths: list[Path], model_path: Path, thr: float) -> list[dict]:
+def score_files(paths: list[Path], model_path: Path,
+                threshold: float) -> list[dict]:
     import keras
-    m = keras.models.load_model(model_path, compile=False)
-    g = np.stack([nv_grid_v2(p.read_bytes()) for p in paths])[..., None].astype(np.float32)
-    a = np.stack([nv_struct_features(p.read_bytes()) for p in paths]).astype(np.float32)
-    p_anom = m.predict([g, a], verbose=0)[:, 1]
-    return [{"file": f.name, "p_anom": round(float(p), 6),
-             "verdict": "ANOMALY" if p > thr else "benign"}
-            for f, p in zip(paths, p_anom)]
+    model = keras.models.load_model(model_path, compile=False)
+    grids = np.stack([nv_grid_v2(path.read_bytes())
+                      for path in paths])[..., None].astype(np.float32)
+    structural = np.stack([nv_struct_features(path.read_bytes())
+                           for path in paths]).astype(np.float32)
+    probabilities = model.predict([grids, structural], verbose=0)[:, 1]
+    return [{"file": path.name, "p_anom": round(float(probability), 6),
+             "verdict": "ANOMALY" if probability > threshold else "benign"}
+            for path, probability in zip(paths, probabilities)]
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("files", nargs="+", type=Path)
-    ap.add_argument("--model", type=Path, default=None)
-    ap.add_argument("--thr", type=float, default=None)
-    args = ap.parse_args()
-    model_path, thr = args.model, args.thr
-    if (model_path is None or thr is None) and META_JSON.exists():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("files", nargs="+", type=Path)
+    parser.add_argument("--model", type=Path, default=None)
+    parser.add_argument("--thr", type=float, default=None)
+    args = parser.parse_args()
+
+    model_path = args.model
+    threshold = args.thr
+    if (model_path is None or threshold is None) and META_JSON.exists():
         meta = json.loads(META_JSON.read_text(encoding="utf-8"))
         model_path = model_path or META_JSON.parent / meta["model"]
-        thr = thr if thr is not None else float(meta["threshold"])
-    if model_path is None or thr is None:
-        raise SystemExit("no packaged weights yet: pass --model and --thr "
-                         "(e.g. the frozen exam winner + its frozen.json threshold)")
-    for row in score_files(args.files, model_path, thr):
+        threshold = threshold if threshold is not None else float(meta["threshold"])
+    if model_path is None or threshold is None:
+        raise SystemExit("no packaged weights found: pass --model and --thr")
+
+    for row in score_files(args.files, model_path, threshold):
         print(f"{row['file']:50s} p={row['p_anom']:.4f}  {row['verdict']}")
     return 0
 

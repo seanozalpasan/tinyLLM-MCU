@@ -1,4 +1,5 @@
-"""Dataset listing + stratified splits for mars_v2.
+"""
+Dataset listing + stratified splits for mars_v2.
 
 trainable_files() honors holdout.txt and quarantine.txt (never a blind glob);
 stratified_calib_split() splits per fill_state x settings_state stratum so rare
@@ -24,38 +25,41 @@ def read_names(path: Path) -> frozenset[str]:
     """Bare names from a list file; '#' starts a comment; missing file = empty."""
     if not path.exists():
         return frozenset()
-    out = set()
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        n = raw.partition("#")[0].strip()
-        if n:
-            out.add(n)
-    return frozenset(out)
+    names = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        name = line.partition("#")[0].strip()
+        if name:
+            names.add(name)
+    return frozenset(names)
 
 
 def trainable_files() -> list[Path]:
     """Benign captures minus holdout minus quarantine."""
-    holdout = read_names(HOLDOUT_TXT)
-    quarantine = read_names(QUARANTINE_TXT)
-    return [f for f in sorted(CAPTURES.glob("benign__*.bin"))
-            if f.name not in holdout and f.name not in quarantine]
+    holdout_names = read_names(HOLDOUT_TXT)
+    quarantine_names = read_names(QUARANTINE_TXT)
+    return [file_path for file_path in sorted(CAPTURES.glob("benign__*.bin"))
+            if file_path.name not in holdout_names
+            and file_path.name not in quarantine_names]
 
 
 def fill_state(view: RegionView) -> str:
-    """Ring fill-state stratification label -- the model never sees it.
+    """How full the ring is -- used only to label captures for splitting.
 
     page_seq counts page-opens, so a seq above NUM_PAGES means some page was
-    erased and reopened (the ring wrapped); the first wrap cycle still carries
-    a virgin-fill header mix, hence the just-wrapped stratum before steady.
+    erased and reopened (the ring wrapped). The first wrap cycle still carries
+    a mix of virgin-fill headers, so it gets its own just-wrapped label before
+    steady state. The model itself never sees these labels.
     """
     if view.current is None:
         return "empty"
     header = view.pages[view.current].header
     assert header is not None   # current is by construction a valid-header page
-    max_seq = header["page_seq"]
-    if max_seq <= spec.NUM_PAGES:
-        n = len(records_chronological(view))
-        return "near-empty" if n <= spec.RECORDS_PER_PAGE // 2 else "pre-wrap"
-    if max_seq <= 2 * spec.NUM_PAGES:
+    newest_page_seq = header["page_seq"]
+    if newest_page_seq <= spec.NUM_PAGES:
+        record_count = len(records_chronological(view))
+        return ("near-empty" if record_count <= spec.RECORDS_PER_PAGE // 2
+                else "pre-wrap")
+    if newest_page_seq <= 2 * spec.NUM_PAGES:
         return "just-wrapped"
     return "steady"
 
@@ -76,26 +80,27 @@ def stratum_of(path: Path) -> str:
 def stratified_calib_split(files: list[Path], seed: int,
                            fraction: float = CALIB_FRACTION,
                            ) -> tuple[list[Path], list[Path]]:
-    """(fit_files, calib_files): per-stratum pick.
+    """(fit_files, calib_files): a per-stratum pick.
 
-    Per stratum: max(1, round(fraction * n)) capped at n - 1; a singleton
-    stratum stays entirely in fit (its regime must be learned; it cannot also
-    calibrate).
+    Per stratum: max(1, round(fraction * n)) capped at n - 1. A stratum with a
+    single capture stays entirely in fit -- its regime has to be learned, and
+    one file cannot be on both sides of a split.
     """
-    rng = np.random.default_rng(seed)
+    random_gen = np.random.default_rng(seed)
     by_stratum: dict[str, list[Path]] = {}
-    for f in sorted(files, key=lambda p: p.name):
-        by_stratum.setdefault(stratum_of(f), []).append(f)
-    fit: list[Path] = []
-    calib: list[Path] = []
+    for file_path in sorted(files, key=lambda p: p.name):
+        by_stratum.setdefault(stratum_of(file_path), []).append(file_path)
+    fit_files: list[Path] = []
+    calib_files: list[Path] = []
     for stratum in sorted(by_stratum):
         group = by_stratum[stratum]
-        n = len(group)
-        if n == 1:
-            fit.extend(group)
+        group_size = len(group)
+        if group_size == 1:
+            fit_files.extend(group)
             continue
-        k = min(n - 1, max(1, round(fraction * n)))
-        idx = set(rng.choice(n, size=k, replace=False).tolist())
-        for i, f in enumerate(group):
-            (calib if i in idx else fit).append(f)
-    return fit, calib
+        calib_count = min(group_size - 1, max(1, round(fraction * group_size)))
+        chosen = set(random_gen.choice(group_size, size=calib_count,
+                                       replace=False).tolist())
+        for position, file_path in enumerate(group):
+            (calib_files if position in chosen else fit_files).append(file_path)
+    return fit_files, calib_files

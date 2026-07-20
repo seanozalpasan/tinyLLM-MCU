@@ -1,6 +1,6 @@
 """Data locations for the standalone mars_v2 package.
 
-This is the ONE file that knows where anything lives on disk. While the package
+This is the one file that knows where anything lives on disk. While the package
 sits inside the tinyLLM-MCU workspace it points at the shared data bank
 (captures, holdout/quarantine lists); when the package moves to its own repo,
 edit these constants (or set MARS_V2_DATA_ROOT) and nothing else changes.

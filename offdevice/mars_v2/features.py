@@ -1,10 +1,10 @@
 """
-These are Record-aware features for the 4 KB NV region in order to detect subtle 
+These are Record-aware features for the 4 KB NV region in order to detect subtle
 tampering that the spectral approach misses.
 
 MFCC/mel/chroma measure byte texture, and a tampered record has normal texture:
 a timestamp going backwards, a humidity of 300%, a broken temp/press
-correlation all look like perfectly ordinary bytes. 
+correlation all look like perfectly ordinary bytes.
 
 These features instead measure what the spec says must be true:
     nonmonotonic_ts     ->  timestamps must be non-decreasing within a boot
@@ -14,13 +14,12 @@ These features instead measure what the spec says must be true:
     journal_tamper      ->  reserved0 == 0 with non-decreasing op_count along the chain
     blob / foreign      ->  unparseable pages, dirty tails, high-entropy fill
 
-    
-A violation is a fact, not a texture. Emitted as a flat float vector for the
+violations becomes a fact instead of a texture. Emitted as a flat float vector for the
 same downstream (z-score -> model) the spectral lane uses.
 
 Uses no FFT, no mel, no MFCC, no chroma, no spectral features at all, Making very portable for MCU.
 I will say this this needs to be reconfigured to have the CNN to catch tampering it doesnt know about as well.
-I don't know if this is the right way to do it, but I think it is a good start in order to have the model get the 
+I don't know if this is the right way to do it, but I think it is a good start in order to have the model get the
 general idea of what tampering looks like.
 """
 
@@ -48,20 +47,21 @@ FEATURE_NAMES = (
 N_STRUCT = len(FEATURE_NAMES)   # 30
 
 
-def _safe_corr(a, b):
+def _safe_corr(series_a, series_b):
     """Pearson r; 0.0 when either channel is constant (undefined, not anomalous)."""
-    if len(a) < 3 or np.std(a) < 1e-9 or np.std(b) < 1e-9:
+    if len(series_a) < 3 or np.std(series_a) < 1e-9 or np.std(series_b) < 1e-9:
         return 0.0
-    return float(np.corrcoef(a, b)[0, 1])
+    return float(np.corrcoef(series_a, series_b)[0, 1])
 
 
 def _entropy(data: bytes) -> float:
     """Shannon entropy (bits/byte). Erased flash ~0; encrypted/compressed ~8."""
     if not data:
         return 0.0
-    counts = Counter(data)
-    n = len(data)
-    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+    byte_counts = Counter(data)
+    total = len(data)
+    return -sum((count / total) * math.log2(count / total)
+                for count in byte_counts.values())
 
 
 def nv_struct_features(nv: bytes) -> np.ndarray:
@@ -69,55 +69,60 @@ def nv_struct_features(nv: bytes) -> np.ndarray:
     if len(nv) == spec.DUMP_OFFSET + spec.REGION_SIZE:
         nv = slice_nv(nv)
     view = parse_region(nv)
-    recs = records_chronological(view)
+    records = records_chronological(view)
 
-    f: list[float] = [float(len(recs))]
+    features: list[float] = [float(len(records))]
 
     # --- timestamps: monotonic within a boot, roughly fixed cadence ---
-    ts = np.array([r["ts"] for r in recs], dtype=np.float64)
-    if len(ts) >= 2:
-        d = np.diff(ts)
-        f += [float((d <= 0).sum()), float(d.min()), float(d.mean()),
-              float(d.std()), float(d.max())]
+    timestamps = np.array([record["ts"] for record in records], dtype=np.float64)
+    if len(timestamps) >= 2:
+        deltas = np.diff(timestamps)
+        features += [float((deltas <= 0).sum()), float(deltas.min()),
+                     float(deltas.mean()), float(deltas.std()), float(deltas.max())]
     else:
-        f += [0.0, 0.0, 0.0, 0.0, 0.0]
+        features += [0.0, 0.0, 0.0, 0.0, 0.0]
 
-    # --- channels: legal range is declared in the spec, so violations are facts ---
-    chans = {}
-    for ch in spec.CHANNELS:
-        v = np.array([r[ch.name] for r in recs], dtype=np.float64)
-        chans[ch.name] = v
-        if len(v):
-            below = np.maximum(ch.lo - v, 0).max()
-            above = np.maximum(v - ch.hi, 0).max()
-            n_oob = int(((v < ch.lo) | (v > ch.hi)).sum())
-            f += [float(n_oob), float(max(below, above)), float(v.mean()), float(v.std())]
+    # --- channels: the legal range is declared in the spec, so violations are facts ---
+    channel_values = {}
+    for channel in spec.CHANNELS:
+        values = np.array([record[channel.name] for record in records],
+                          dtype=np.float64)
+        channel_values[channel.name] = values
+        if len(values):
+            below = np.maximum(channel.lo - values, 0).max()
+            above = np.maximum(values - channel.hi, 0).max()
+            out_of_range_count = int(((values < channel.lo) | (values > channel.hi)).sum())
+            features += [float(out_of_range_count), float(max(below, above)),
+                         float(values.mean()), float(values.std())]
         else:
-            f += [0.0, 0.0, 0.0, 0.0]
+            features += [0.0, 0.0, 0.0, 0.0]
 
-    # --- inter-channel physics: temp/hum/press co-vary in a real environment ---
-    f += [_safe_corr(chans["temp"], chans["hum"]),
-          _safe_corr(chans["temp"], chans["press"]),
-          _safe_corr(chans["hum"], chans["press"])]
+    # --- inter-channel physics: temp/hum/press move together in a real environment ---
+    features += [_safe_corr(channel_values["temp"], channel_values["hum"]),
+                 _safe_corr(channel_values["temp"], channel_values["press"]),
+                 _safe_corr(channel_values["hum"], channel_values["press"])]
 
-    # --- settings journal: reserved0 must be 0, op_count non-decreasing ---
-    n_entries = reserved_bad = op_nonmono = 0
-    tail_dirty = 0
+    # --- settings journal: reserved0 must be 0, op_count never steps backwards ---
+    journal_entries = reserved_violations = op_count_backwards = 0
+    journal_tails_dirty = 0
     for page in view.pages:
-        tail_dirty += 0 if page.journal_tail_clean else 1
-        chain = [s for s in page.journal if s is not None]
-        n_entries += len(chain)
-        reserved_bad += sum(1 for s in chain if s.get("reserved0", 0) != 0)
-        ops = [s["op_count"] for s in chain]
-        op_nonmono += sum(1 for a, b in zip(ops, ops[1:]) if b < a)
-    f += [float(n_entries), float(reserved_bad), float(op_nonmono), float(tail_dirty)]
+        journal_tails_dirty += 0 if page.journal_tail_clean else 1
+        chain = [slot for slot in page.journal if slot is not None]
+        journal_entries += len(chain)
+        reserved_violations += sum(1 for slot in chain
+                                   if slot.get("reserved0", 0) != 0)
+        op_counts = [slot["op_count"] for slot in chain]
+        op_count_backwards += sum(1 for earlier, later in zip(op_counts, op_counts[1:])
+                                  if later < earlier)
+    features += [float(journal_entries), float(reserved_violations),
+                 float(op_count_backwards), float(journal_tails_dirty)]
 
     # --- page structure + raw fill ---
-    n_valid = sum(1 for p in view.pages if p.header is not None)
-    pg_tail_dirty = sum(1 for p in view.pages if not p.tail_clean)
-    pg_pad_dirty = sum(1 for p in view.pages if not p.pad_clean)
-    f += [float(n_valid), float(pg_tail_dirty), float(pg_pad_dirty)]
+    valid_headers = sum(1 for page in view.pages if page.header is not None)
+    record_tails_dirty = sum(1 for page in view.pages if not page.tail_clean)
+    pads_dirty = sum(1 for page in view.pages if not page.pad_clean)
+    features += [float(valid_headers), float(record_tails_dirty), float(pads_dirty)]
 
-    f += [_entropy(nv), float(nv.count(spec.ERASED_BYTE)) / len(nv)]
+    features += [_entropy(nv), float(nv.count(spec.ERASED_BYTE)) / len(nv)]
 
-    return np.array(f, dtype=np.float32)
+    return np.array(features, dtype=np.float32)
