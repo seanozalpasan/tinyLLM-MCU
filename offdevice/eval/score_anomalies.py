@@ -14,11 +14,11 @@ Anomaly types split into three reporting buckets that are never mixed:
   floor         -- journal tampers: measures the detection floor, not a headline
   designed_miss -- classes the detector is NOT supposed to catch; expectations only
 
-The benign side of every false-alarm number is the artifact's 122 leave-one-out
+The benign side of every false-alarm number is the artifact's leave-one-out
 distances (each training capture scored by a model fitted without it) -- the same
 distribution the threshold came from, and the only honest benign scores that exist
-without new data. The spent 31-capture holdout is never rescored here; the one
-anchor base below reproduces an already-revealed number, it does not grade anything.
+without new data. The spent holdout is never rescored here; the one anchor base
+below reproduces an already-revealed number, it does not grade anything.
 
 Outputs: console tables, results JSON, and three PNGs (score line, blob sweep,
 ROC appendix) under offdevice/eval/results/.
@@ -46,12 +46,13 @@ DEFAULT_ARTIFACT = (Path(__file__).resolve().parents[1]
                     / "model" / "artifacts" / "mahalanobis.npz")
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
-# The fullest-ring base's distance as revealed by the one-shot holdout exam (the
-# single alarm, banked as d=14.34). Reproducing it proves the loaded artifact and
-# feature pipeline are the exact pair that graded that exam; any drift here means
-# the eval would be scored by a different model than the one we shipped.
+# The fullest-ring pinned base's distance as revealed by the one-shot holdout
+# exam of the corner + honest-tail fit (0 of 49 flagged; this base banked at
+# d=10.815). Reproducing it proves the loaded artifact and feature pipeline are
+# the exact pair that graded that exam; any drift here means the eval would be
+# scored by a different model than the one we shipped.
 EXAM_ANCHOR = ("benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
-               14.34, 0.01)
+               10.815, 0.01)
 
 HEADLINE_TYPES = {"foreign_blob", "stride_break", "correlation_break",
                   "out_of_range_value", "nonmonotonic_ts"}
