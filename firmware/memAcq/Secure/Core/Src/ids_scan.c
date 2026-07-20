@@ -72,6 +72,47 @@ static uint32_t score_milli(float d2)
   return (s < 4.0e9f) ? (uint32_t)s : 0xFFFFFFFFu;
 }
 
+/* Display-only ring position for the scan line ("slot=104/122 seq=257"), so
+   every soak/collection line self-reports which fill state it scored -- the
+   same meaning as the NVLOG init line's slot (the write head = the first
+   all-0xFF record slot of the active page; active = higher page_seq among
+   version-valid headers). Reads the live NV bytes directly; call only after
+   a successful score_pass, whose ICACHE invalidate made these reads fresh.
+   A blank ring prints "--" rather than faking slot 0. Never feeds the
+   verdict. */
+static void slot_text(char out[32])
+{
+  const NvHeader *h0 = (const NvHeader *)NV_PAGE0_BASE;
+  const NvHeader *h1 = (const NvHeader *)NV_PAGE1_BASE;
+  const int v0 = (h0->version == NV_SPEC_VERSION);
+  const int v1 = (h1->version == NV_SPEC_VERSION);
+  const NvHeader *act = NULL;
+
+  if (v0 && v1)      act = (h1->page_seq > h0->page_seq) ? h1 : h0;
+  else if (v0)       act = h0;
+  else if (v1)       act = h1;
+
+  if (act == NULL)
+  {
+    snprintf(out, 32, "slot=--/%u seq=--", (unsigned)NV_RECORDS_PER_PAGE);
+    return;
+  }
+
+  const uint8_t *recs = (const uint8_t *)act + NV_RECORDS_OFFSET;
+  uint32_t slot = 0;
+  while (slot < NV_RECORDS_PER_PAGE)
+  {
+    const uint8_t *p = recs + slot * NV_RECORD_SIZE;
+    uint32_t i = 0;
+    while (i < NV_RECORD_SIZE && p[i] == NV_ERASED_BYTE) i++;
+    if (i == NV_RECORD_SIZE) break;   /* first blank slot = the write head */
+    slot++;
+  }
+  snprintf(out, 32, "slot=%lu/%u seq=%lu",
+           (unsigned long)slot, (unsigned)NV_RECORDS_PER_PAGE,
+           (unsigned long)act->page_seq);
+}
+
 /* One scoring pass over the live NV region. Returns 1 = benign (d2 in
    *d2_out), 0 = anomalous (d2 in *d2_out), -1 = failed (cache invalidate or
    a non-finite score -- either way never convertible to a clean verdict). */
@@ -109,6 +150,7 @@ static void run_scan(void)
   static uint32_t hash_seen;
   float d2 = 0.0f;
   int clean = 0;
+  char pos[32];
 
   scan_no++;
 
@@ -128,29 +170,31 @@ static void run_scan(void)
     verdict = score_pass(&d2);
     const uint32_t m1 = score_milli(d2_first);
     const uint32_t m2 = score_milli(d2);
+    slot_text(pos);
     if (verdict == 1)
     {
-      printf("[IDS] scan #%lu score=%lu.%03lu then %lu.%03lu on rescan -- "
+      printf("[IDS] scan #%lu score=%lu.%03lu then %lu.%03lu on rescan %s -- "
              "transient, benign\r\n",
              (unsigned long)scan_no,
              (unsigned long)(m1 / 1000u), (unsigned long)(m1 % 1000u),
-             (unsigned long)(m2 / 1000u), (unsigned long)(m2 % 1000u));
+             (unsigned long)(m2 / 1000u), (unsigned long)(m2 % 1000u), pos);
     }
     else if (verdict == 0)
     {
-      printf("[IDS] scan #%lu score=%lu.%03lu rescan=%lu.%03lu ANOMALY -- "
+      printf("[IDS] scan #%lu score=%lu.%03lu rescan=%lu.%03lu %s ANOMALY -- "
              "withholding watchdog kick, reset imminent\r\n",
              (unsigned long)scan_no,
              (unsigned long)(m1 / 1000u), (unsigned long)(m1 % 1000u),
-             (unsigned long)(m2 / 1000u), (unsigned long)(m2 % 1000u));
+             (unsigned long)(m2 / 1000u), (unsigned long)(m2 % 1000u), pos);
     }
   }
   else if (verdict == 1)
   {
     const uint32_t milli = score_milli(d2);
-    printf("[IDS] scan #%lu score=%lu.%03lu benign\r\n",
+    slot_text(pos);
+    printf("[IDS] scan #%lu score=%lu.%03lu %s benign\r\n",
            (unsigned long)scan_no,
-           (unsigned long)(milli / 1000u), (unsigned long)(milli % 1000u));
+           (unsigned long)(milli / 1000u), (unsigned long)(milli % 1000u), pos);
   }
   clean = (verdict == 1);
 
