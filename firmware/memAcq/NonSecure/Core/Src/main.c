@@ -641,39 +641,32 @@ static void Uart3_Write(const uint8_t *buf, uint32_t len)
 /**
   * @brief  Non-blocking poll of the USART3 RX path (ESP32 -> STM32). Drains the RX register
   *         into a small buffer, scans for the ESP32 test frame [0x5A 0xA5 | cnt u32 LE | xor],
-  *         and logs "RX ok: cnt=N" per valid frame. This is the reverse channel the attack
+  *         and reports the channel once per 20 s. This is the reverse channel the attack
   *         scenario will later use to feed corrupt data into the device.
   */
 static void Uart3_Poll(void)
 {
   static uint8_t  rx_buf[32];
-  static uint32_t rx_len   = 0u;
-  static uint32_t rx_total = 0u;     /* DIAGNOSTIC: total raw bytes ever seen on PC11 */
-  uint32_t got  = 0u;
-  uint8_t  last = 0u;
+  static uint32_t rx_len    = 0u;
+  static uint32_t rx_total  = 0u;    /* total raw bytes ever seen on PC11 */
+  static uint32_t rx_pend   = 0u;    /* raw bytes since the last report */
+  static uint8_t  rx_last   = 0u;
+  static uint32_t cnt_seen  = 0u;    /* newest ESP32 counter this window */
+  static uint32_t cnt_fresh = 0u;    /* frames parsed since the last report */
+  static uint32_t report_ms = 0u;
 
   if ((USART3->ISR & USART_ISR_ORE) != 0u) { USART3->ICR = USART_ICR_ORECF; }  /* clear overrun */
 
   while ((USART3->ISR & USART_ISR_RXNE_RXFNE) != 0u)
   {
     const uint8_t b = (uint8_t)USART3->RDR;
-    last = b; got++; rx_total++;
+    rx_last = b; rx_pend++; rx_total++;
     if (rx_len >= sizeof(rx_buf))                  /* full w/o a frame: slide off oldest half */
     {
       memmove(rx_buf, rx_buf + sizeof(rx_buf) / 2u, sizeof(rx_buf) / 2u);
       rx_len = sizeof(rx_buf) / 2u;
     }
     rx_buf[rx_len++] = b;
-  }
-
-  /* DIAGNOSTIC: did ANY raw byte arrive on PC11 this poll? Separates "nothing reaches the
-     RX pin" (physical/mux) from "bytes arrive but don't frame" (baud/format). */
-  if (got > 0u)
-  {
-    char d[72];
-    snprintf(d, sizeof(d), "[NS] RX raw: +%lu (total=%lu, last=0x%02X)\r\n",
-             (unsigned long)got, (unsigned long)rx_total, (unsigned)last);
-    SECURE_print_Log(d);
   }
 
   for (uint32_t i = 0u; i + RXTEST_FRAME_LEN <= rx_len; i++)
@@ -683,17 +676,40 @@ static void Uart3_Poll(void)
     for (uint32_t k = 0u; k < RXTEST_FRAME_LEN - 1u; k++) { x ^= rx_buf[i + k]; }
     if (x != rx_buf[i + RXTEST_FRAME_LEN - 1u]) { continue; }
 
-    const uint32_t cnt = (uint32_t)rx_buf[i + 2] | ((uint32_t)rx_buf[i + 3] << 8) |
-                         ((uint32_t)rx_buf[i + 4] << 16) | ((uint32_t)rx_buf[i + 5] << 24);
-    char m[64];
-    snprintf(m, sizeof(m), "[NS] RX ok: from ESP32 cnt=%lu\r\n", (unsigned long)cnt);
-    SECURE_print_Log(m);
+    cnt_seen = (uint32_t)rx_buf[i + 2] | ((uint32_t)rx_buf[i + 3] << 8) |
+               ((uint32_t)rx_buf[i + 4] << 16) | ((uint32_t)rx_buf[i + 5] << 24);
+    cnt_fresh++;
 
     const uint32_t consumed = i + RXTEST_FRAME_LEN;
     const uint32_t remain   = rx_len - consumed;
     if (remain > 0u) { memmove(rx_buf, rx_buf + consumed, remain); }
     rx_len = remain;
-    return;  /* one frame per poll is plenty at 1 Hz */
+    break;  /* one frame per poll is plenty at 1 Hz */
+  }
+
+  /* Frames arrive ~1/s; per-event prints bury the [IDS]/[HASH] lines the console
+     exists for, so report once per 20 s (slotted between the 15 s record and the
+     25 s scan cadences). No line inside a window = the reverse channel went quiet. */
+  const uint32_t now = HAL_GetTick();
+  if ((now - report_ms) >= 20000u)
+  {
+    report_ms = now;
+    if (rx_pend > 0u)
+    {
+      char d[72];
+      snprintf(d, sizeof(d), "[NS] RX raw: +%lu (total=%lu, last=0x%02X)\r\n",
+               (unsigned long)rx_pend, (unsigned long)rx_total, (unsigned)rx_last);
+      SECURE_print_Log(d);
+      rx_pend = 0u;
+    }
+    if (cnt_fresh > 0u)
+    {
+      char m[80];
+      snprintf(m, sizeof(m), "[NS] RX ok: from ESP32 cnt=%lu (+%lu frames)\r\n",
+               (unsigned long)cnt_seen, (unsigned long)cnt_fresh);
+      SECURE_print_Log(m);
+      cnt_fresh = 0u;
+    }
   }
 }
 

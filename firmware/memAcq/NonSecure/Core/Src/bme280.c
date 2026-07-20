@@ -322,6 +322,18 @@ int BME280_Init(void)
   return 0;
 }
 
+/* A wedged bus mid-run has exactly one cure and Init already implements it:
+   bme_bus_clear clocks the slave off SDA (and prints when it had to -- that
+   line is the field diagnostic for WHICH side wedged), the FORCE_RESET pair
+   clears any latched I2C1 peripheral state, and the probe/reset/trim/config
+   sequence restores the chip. No board reset involved: flash, the IDS scan,
+   and telemetry are untouched. */
+int BME280_Recover(void)
+{
+  bme_print("[BME] recover: re-running bus clear + bring-up\r\n");
+  return BME280_Init();
+}
+
 int BME280_Measure(BME280_Sample *s)
 {
   uint8_t d[8];

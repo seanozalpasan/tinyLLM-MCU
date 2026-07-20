@@ -120,6 +120,14 @@ static int32_t clampi(int32_t v, int32_t lo, int32_t hi)
   return (v < lo) ? lo : ((v > hi) ? hi : v);
 }
 
+/* Consecutive BME280_Measure failures. One failure is a shrug (a lone blip
+   self-clears); the second in a row means the bus is presumed wedged -- a
+   mid-transfer glitch leaves the chip holding SDA low, and no number of plain
+   retries ever clears that -- so from then on every tick runs BME280_Recover
+   before giving up. Success on any path zeroes the streak. */
+#define NV_SENSOR_FAILS_BEFORE_RECOVER  2u
+static uint32_t s_sensor_fails;
+
 /* One fresh reading of all three channels, clamped to the spec ranges.
    Returns 0 and fills the outputs, or -1 when the record must be SKIPPED:
    bus fault, measurement timeout, or the Bosch divide-by-zero guard's
@@ -133,9 +141,23 @@ static int read_sensor(int32_t *temp, int32_t *hum, int32_t *press)
 
   if (BME280_Measure(&smp) != 0 || smp.comp_p == 0u)
   {
-    SECURE_print_Log("[NVLOG] sensor read failed; record skipped\r\n");
-    return -1;
+    s_sensor_fails++;
+    if (s_sensor_fails < NV_SENSOR_FAILS_BEFORE_RECOVER)
+    {
+      SECURE_print_Log("[NVLOG] sensor read failed; record skipped\r\n");
+      return -1;
+    }
+    /* Heal the bus and retry the measurement in the same tick, so a
+       successful recovery costs exactly the one already-skipped record. */
+    SECURE_print_Log("[NVLOG] consecutive sensor failures; attempting bus recovery\r\n");
+    if (BME280_Recover() != 0 || BME280_Measure(&smp) != 0 || smp.comp_p == 0u)
+    {
+      SECURE_print_Log("[NVLOG] recovery FAILED; record skipped (will retry next tick)\r\n");
+      return -1;
+    }
+    SECURE_print_Log("[NVLOG] bus recovered; logging resumes\r\n");
   }
+  s_sensor_fails = 0u;
 
   *temp  = clampi(smp.temp, NV_TEMP_LO, NV_TEMP_HI);
   *hum   = clampi((int32_t)smp.hum, (int32_t)NV_HUM_LO, (int32_t)NV_HUM_HI);

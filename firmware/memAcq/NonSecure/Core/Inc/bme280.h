@@ -52,6 +52,14 @@ int BME280_Init(void);
    success, -1 on a bus fault or measurement timeout. */
 int BME280_Measure(BME280_Sample *s);
 
+/* Mid-run bus heal: re-runs the full bring-up (stuck-SDA bus clear, I2C1
+   force-reset, re-probe, soft reset, trim re-read -- same die, same trim).
+   A glitch landing inside a transfer can leave the chip holding SDA low,
+   and boot is otherwise the only place that state gets cleared. Idempotent
+   on a healthy bus; ~30 ms. Returns 0 on success, -1 if the sensor is
+   still unreachable (caller retries later). */
+int BME280_Recover(void);
+
 #if BME280_SELFTEST
 /* Calibration dump + measurement vectors, printed in the exact line format
    bme280_ref.py parses. Call AFTER BME280_Init (init happens exactly once, in
