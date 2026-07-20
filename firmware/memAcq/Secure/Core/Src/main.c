@@ -25,6 +25,7 @@
 #include "flash_dump.h"
 #include "static_hash.h"   /* Part-1 IDS: static NS-region SHA-256 vs golden */
 #include "nv_features.h"   /* Part-2 IDS: NV-region features (parity harness for now) */
+#include "ospi_hash.h"     /* OSPI XIP weight-blob attestation (compile-time golden) */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -75,18 +76,22 @@
 #define OCTAL_RESET_MEMORY_CMD      0x9966
 #define MEMORY_RESET_MAX_DELAY      100   /* ms; reset recovery worst case (reset during erase) */
 
-/* 1 = bring up OCTOSPI1 + memory-mapped XIP at boot ([S ] OSPI console lines).
-   0 = skip external flash entirely: the ML route's model lives in internal
-   flash and never touches OSPI, so the workload build stays quiet and boots
-   faster (and skips the self-test's per-boot sector erase). The proven
-   bring-up code below stays compiled-out, ready for the parked LLM route.
-   GOTCHA: NonSecure main.c's read-back check (OSPI_XIP_CHECK) MUST be 0
-   whenever this is 0 -- a non-secure read of unmapped 0x90000000 faults. */
-#define OSPI_XIP_BRINGUP   0
+/* 1 = bring up OCTOSPI1 + memory-mapped XIP at boot ([S ] OSPI console lines)
+  and attest the resident weight blob (OspiHash_BootCheck).
+  The int8 grid-AE blob lives at 0x90000000 (blob_export.py).
+  
+  0 = skip external flash entirely (OSPI-less build, internal-flash work only).
+  The ML route's model lives in internal flash and never touches OSPI, 
+  so the workload build stays quiet and boots faster 
+  (and skips the self-test's per-boot sector erase).
+  
+  NOTE: NonSecure main.c's read-back check (OSPI_XIP_CHECK) MUST be 0
+  whenever this is 0 -- a non-secure read of unmapped 0x90000000 faults. */
+#define OSPI_XIP_BRINGUP   1
 
 /* 1 = destructive erase/program/verify self-test at boot.  0 = init + memory-mapped READ only.
-   GOTCHA: flip to 0 once real weights live in OSPI flash, or every boot erases them. */
-#define OSPI_XIP_SELFTEST  1
+   NOTE: flip to 0 once real weights live in OSPI flash, or every boot erases them. */
+#define OSPI_XIP_SELFTEST  0
 
 /* USER CODE END PD */
 
@@ -155,7 +160,7 @@ static void OSPI_SendCommandNoData(OSPI_HandleTypeDef *hospi, uint32_t instructi
                                    uint32_t instr_dtr);
 static void OSPI_ResetFlash(OSPI_HandleTypeDef *hospi);
 static void OSPI_Init(void);
-static void OSPI_EnableMemoryMapped(int with_write);
+static void OSPI_EnableMemoryMapped(void);
 #if OSPI_XIP_SELFTEST
 static void OSPI_XIP_SelfTest(void);
 #endif
@@ -210,10 +215,11 @@ int main(void)
   StaticHash_BootCheck();
 
   /* Hand B2/PC13 to the NonSecure world (runtime settings input) -- only AFTER
-     the enrollment read above, so the boot check always samples the button
-     under secure ownership. GOTCHA: pins reset SECURE, and an ungranted
-     NonSecure read is silently RAZ/WI -- the NS code would run fine and just
-     never see a press. GPIOC's clock is already on (MX_GPIO_Init). */
+    the enrollment read above, so the boot check always samples the button
+    under secure ownership. 
+    NOTE: pins reset SECURE, and an ungranted NonSecure read is silently RAZ/WI  
+    The NS code would run fine and just never see a press. GPIOC's clock 
+    is already on (MX_GPIO_Init). */
   HAL_GPIO_ConfigPinAttributes(GPIOC, GPIO_PIN_13, GPIO_PIN_NSEC);
 
 #if NV_FEAT_PARITY
@@ -231,7 +237,8 @@ int main(void)
 #if OSPI_XIP_SELFTEST
   OSPI_XIP_SelfTest();          /* erases + programs + verifies; leaves memory-mapped mode on */
 #else
-  OSPI_EnableMemoryMapped(0);   /* production: read-only XIP, no erase/program */
+  OSPI_EnableMemoryMapped();    /* production: read-only XIP (WEL clear, so no erase/program) */
+  OspiHash_BootCheck();         /* attest the XIP weight blob before anything consumes it */
 #endif
   printf("[S ] OCTOSPI1 in memory-mapped mode @0x90000000.\r\n");
 #endif /* OSPI_XIP_BRINGUP */
@@ -418,13 +425,15 @@ static void MX_GTZC_S_Init(void)
   /* Open OCTOSPI1 to non-secure. External memory defaults to SECURE in GTZC, but SAU region 4
      marks 0x60000000-0x9FFFFFFF non-secure -- so every access to 0x90000000 (even from secure
      code) is a non-secure bus transaction, blocked until we drop a non-secure watermark (MPCWM)
-     here. One 128 KB granule from offset 0 covers the 4 KB test sector; grow Length to span the
-     full weight blob (128 KB-granular) before XIP'ing real weights. */
+     here. Length is 128 KB-granular; keep it >= OSPI_BLOB_LEN rounded up. 6
+     granules = 768 KB covers the 454 KB int8 blob (blob_export.py) with room for
+     the fp32 variant. Shrink back to 1 granule if you revert to the 4 KB pattern
+     self-test. */
   {
     MPCWM_ConfigTypeDef MPCWM_OSPI_Desc = {0};
     MPCWM_OSPI_Desc.AreaId = GTZC_TZSC_MPCWM_ID1;
     MPCWM_OSPI_Desc.Offset = 0U;
-    MPCWM_OSPI_Desc.Length = GTZC_TZSC_MPCWM_GRANULARITY; /* 128 KB */
+    MPCWM_OSPI_Desc.Length = 6U * GTZC_TZSC_MPCWM_GRANULARITY; /* 768 KB spans the weight blob */
     if (HAL_GTZC_TZSC_MPCWM_ConfigMemAttributes(OCTOSPI1_BASE, &MPCWM_OSPI_Desc) != HAL_OK)
     {
       Error_Handler();
@@ -636,7 +645,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
   /* ---- Test-bed A: release the telemetry pins to the NonSecure world ----
-     GOTCHA: STM32L5 resets EVERY GPIO pin to secure, and a NonSecure write to a secure
+     NOTE: STM32L5 resets EVERY GPIO pin to secure, and a NonSecure write to a secure
      pin's MODE/AF/ODR is silently RAZ/WI. The workload runs NonSecure, so its pins must be
      granted NSEC here -- SECCFGR is writable only from the secure side, and the port clock
      must be on first. (The SPI pins below are vestigial from the abandoned SPI path -- kept
@@ -982,7 +991,7 @@ static void OSPI_SendCommandNoData(OSPI_HandleTypeDef *hospi, uint32_t instructi
 
 /**
   * @brief Force the flash back to 1-line SPI STR from whatever mode it's in.
-  *        GOTCHA: an MCU reset doesn't power-cycle external flash, so it may still be in
+  *        NOTE: an MCU reset doesn't power-cycle external flash, so it may still be in
   *        octal mode from the previous boot while our config assumes SPI. Send
   *        Reset-Enable+Reset in every mode (SPI/STR, OPI/STR, OPI/DTR); only the matching
   *        one is understood. Mirrors ST BSP OSPI_NOR_ResetMemory().
@@ -1023,11 +1032,11 @@ static void OSPI_Init(void)
 
 /**
   * @brief Configure and enter memory-mapped mode so 0x90000000 is readable in
-  *        place (XIP). Pass with_write != 0 to also allow programming via bus
-  *        writes (only the self-test needs that); the production weight-read path
-  *        uses with_write == 0 (read-only).
+  *        place (XIP). Whether bus writes can program the flash is gated by the
+  *        flash's WEL bit, not here: WEL stays clear unless OSPI_WriteEnable()
+  *        ran first (self-test path only).
   */
-static void OSPI_EnableMemoryMapped(int with_write)
+static void OSPI_EnableMemoryMapped(void)
 {
   OSPI_RegularCmdTypeDef   sCommand = {0};
   OSPI_MemoryMappedTypeDef sMemMappedCfg = {0};
@@ -1046,16 +1055,18 @@ static void OSPI_EnableMemoryMapped(int with_write)
   sCommand.NbData             = 1;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
-  if (with_write)
+  /* HAL NOTE : HAL_OSPI_MemoryMapped() demands state CMD_CFG, which the L5 HAL 
+    only reaches after BOTH a WRITE_CFG and a READ_CFG command -- READ_CFG alone 
+    leaves READ_CMD_CFG (0x14) and the call fails with INVALID_SEQUENCE. 
+    So both configs are always registered here; read-only-ness comes from WEL 
+    (see brief above). */
+  sCommand.OperationType = HAL_OSPI_OPTYPE_WRITE_CFG;
+  sCommand.Instruction   = OCTAL_PAGE_PROG_CMD;
+  sCommand.DummyCycles   = 0;
+  sCommand.DQSMode       = HAL_OSPI_DQS_ENABLE;
+  if (HAL_OSPI_Command(&hospi1, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
-    sCommand.OperationType = HAL_OSPI_OPTYPE_WRITE_CFG;
-    sCommand.Instruction   = OCTAL_PAGE_PROG_CMD;
-    sCommand.DummyCycles   = 0;
-    sCommand.DQSMode       = HAL_OSPI_DQS_ENABLE;
-    if (HAL_OSPI_Command(&hospi1, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
-    {
-      Error_Handler();
-    }
+    Error_Handler();
   }
 
   sCommand.OperationType = HAL_OSPI_OPTYPE_READ_CFG;
@@ -1116,9 +1127,9 @@ static void OSPI_XIP_SelfTest(void)
   OSPI_AutoPollingMemReady(&hospi1);
   printf("[S ] sector erase complete.\r\n");
 
-  /* Enter memory-mapped mode with write enabled so we can program via the bus */
+  /* WEL set + memory-mapped mode => bus writes program the flash */
   OSPI_WriteEnable(&hospi1);
-  OSPI_EnableMemoryMapped(1);
+  OSPI_EnableMemoryMapped();
 
   /* Program the known pattern (16 bytes, within one 256-byte page) */
   xip_b = (volatile uint8_t *)OCTOSPI1_BASE;
