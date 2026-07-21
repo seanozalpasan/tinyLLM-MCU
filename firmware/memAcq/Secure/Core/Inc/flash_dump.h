@@ -20,7 +20,7 @@
        within DUMP_BOOT_WINDOW_MS, then boot normally -- lets the unattended
        collector (offdevice/data/collect.py) snapshot via reset + 'D' with no
        reflashing between captures. */
-#define DUMP_NSFLASH        2
+#define DUMP_NSFLASH        0
 #define DUMP_BOOT_WINDOW_MS 2000U            /* mode-2 trigger window; the dump itself may exceed it */
 #define NSFLASH_DUMP_START  0x08040000UL     /* NS internal flash, bank 2 (..0x0807FFFF) */
 #define NSFLASH_DUMP_BYTES  0x00040000UL     /* 256 KB = 262144 bytes */

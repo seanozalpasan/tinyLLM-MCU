@@ -47,12 +47,12 @@ DEFAULT_ARTIFACT = (Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "results"
 
 # The fullest-ring pinned base's distance as revealed by the one-shot holdout
-# exam of the corner + honest-tail fit (0 of 49 flagged; this base banked at
-# d=10.815). Reproducing it proves the loaded artifact and feature pipeline are
-# the exact pair that graded that exam; any drift here means the eval would be
-# scored by a different model than the one we shipped.
+# exam of the tail4-inclusive exclusion fit (0 of 39 flagged; this base banked
+# at d=11.706). Reproducing it proves the loaded artifact and feature pipeline
+# are the exact pair that graded that exam; any drift here means the eval
+# would be scored by a different model than the one we shipped.
 EXAM_ANCHOR = ("benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
-               10.815, 0.01)
+               11.706, 0.01)
 
 HEADLINE_TYPES = {"foreign_blob", "stride_break", "correlation_break",
                   "out_of_range_value", "nonmonotonic_ts"}
