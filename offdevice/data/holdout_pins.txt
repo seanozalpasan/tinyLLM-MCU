@@ -2,19 +2,30 @@
 # offdevice/model/split.py (read_name_list); format matches holdout.txt --
 # bare filename, '#' comment.
 #
-# One group: the 8 collaborator anomaly BASE captures. offdevice/data/
-# collab_bases.txt stays the mailed-copy record; the md5s are repeated here
-# so the split keeps verifying the banked file == the mailed file. Every
-# returned anomaly is a tampered copy of one of these, so the model must
-# never have trained on the file under the tampering, or the detection
-# numbers would carry a memorized-base confound.
+# Two groups, two reasons:
+#
+# 1) The 8 collaborator anomaly BASE captures. offdevice/data/
+#    collab_bases.txt stays the mailed-copy record; the md5s are repeated
+#    here so the split keeps verifying the banked file == the mailed file.
+#    Every returned anomaly is a tampered copy of one of these, so the model
+#    must never have trained on the file under the tampering, or the
+#    detection numbers would carry a memorized-base confound.
+#
+# 2) 6 of the 29 nv15s-lab-tail4 honest tails (the deep-corner collection:
+#    one capture per page cycle, honesty-verified, written exactly as
+#    deployment writes). Selection rule, fixed before any scoring: every
+#    fifth honest tail by run number starting at run001, which lands every
+#    sampled depth (slots 115-121) in the exam. Pinning them makes
+#    never-trained honest-corner exam data; the other 23 (plus the run000
+#    positioning capture) train. No md5 comments -- the manifest md5,
+#    re-checked against file bytes at every load, is the only authority.
 #
 # The nv15s-lab-tail1 collection carries no pins because it is excluded from
 # the dataset entirely (the split's variant list omits the tag): its burst
 # capture cadence stamped a repeating timestamp-restart lattice into the
 # trained corner texture, which a steadily running board never writes.
 #
-# chosen=2026-07-20  spec=v2  campaign=nv15s-lab-*
+# chosen=2026-07-21  spec=v2  campaign=nv15s-lab-*
 
 benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin    # 36 recs   near-empty    quiet    p0:1       md5=a8b01ca9981c340cca1913aead0a3ddf
 benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin  # 130 recs  steady        quiet    p0:1 p1:1  md5=ca3064e261353c94883ebc10eecd8bc9
@@ -24,3 +35,10 @@ benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin  # 178 recs  steady 
 benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin    # 216 recs  pre-wrap      changed  p0:3 p1:1  md5=2145d64d9fd4ebf927c1bb57260168a4
 benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin     # 242 recs  steady        quiet    p0:1 p1:1  md5=c9ecf3a0a0e2fc0362e3ec7055c5d56b
 benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin  # 244 recs  steady        changed  p0:2 p1:1  md5=889d2ed80ed4efad01b118532ac814c3
+
+benign__tbA__nv15s-lab-tail4__run001__20260720T222010.bin    # 238 recs  steady  quiet  honest tail, slot 116
+benign__tbA__nv15s-lab-tail4__run006__20260721T005154.bin    # 240 recs  steady  quiet  honest tail, slot 118
+benign__tbA__nv15s-lab-tail4__run011__20260721T032339.bin    # 242 recs  steady  quiet  honest tail, slot 120
+benign__tbA__nv15s-lab-tail4__run016__20260721T055509.bin    # 243 recs  steady  quiet  honest tail, slot 121
+benign__tbA__nv15s-lab-tail4__run021__20260721T082454.bin    # 237 recs  steady  quiet  honest tail, slot 115
+benign__tbA__nv15s-lab-tail4__run026__20260721T105653.bin    # 240 recs  steady  quiet  honest tail, slot 118
