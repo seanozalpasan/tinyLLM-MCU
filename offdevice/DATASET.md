@@ -51,15 +51,23 @@ the on-chip CMSIS-DSP port is validated against.
 
 - One capture = one 4 KB NV snapshot = one training sample. Captures travel as 256 KB
   whole-flash dumps on the wire, and the NV slice is cut out in Python.
-- **The dataset is the combined spec-v2 + BME280 campaign plus two late-fill (tail)
-  collections: 233 distinct benign captures, committed in `offdevice/data/captures/`
-  together with `manifest.jsonl`.** The campaign tags are
+- **The modeled dataset is the combined spec-v2 + BME280 campaign plus the honest
+  late-fill (tail) collections: 194 benign captures, committed in
+  `offdevice/data/captures/` together with `manifest.jsonl`.** The modeled tags are
   `nv15s-lab-{fill1,fill2,steady1,top1,top2,top3}`, `nv15s-lab2-{steady1,top1}`,
-  `nv15s-lab-tail1` (69), `nv15s-lab-tail2` (8), and `nv15s-lab-tail3-withsettings`
-  (3). Fill-state strata: empty=1, near-empty=3, pre-wrap=6, just-wrapped=3,
-  steady=220; settings strata: settings-quiet=144, settings-changed=89. One further
-  campaign capture — a byte-identical seam clone — is retracted via the quarantine
-  list (policy below), giving 233 distinct from 234 banked.
+  `nv15s-lab-tail2` (8), `nv15s-lab-tail3-withsettings` (3), and `nv15s-lab-tail4`
+  (30: 29 honest tails plus 1 positioning capture). Fill-state strata: empty=1,
+  near-empty=3, pre-wrap=6, just-wrapped=3, steady=181; settings strata:
+  settings-quiet=137, settings-changed=57. One further campaign capture — a
+  byte-identical seam clone — is retracted via the quarantine list (policy below).
+- **The `nv15s-lab-tail1` collection (69 captures) is banked but excluded from every
+  model path** — the split's variant list simply omits the tag, so nothing trains or
+  examines on it. Its burst collector captured every ~45 s through the late-fill
+  band, and because every capture resets the board, those captures' trailing records
+  carry a repeating timestamp-restart lattice that a steadily running board never
+  writes. A model trained on that texture learned it as the benign corner and then
+  over-scored live monotonic corners — the direct cause of the false alarms that
+  triggered the exclusion. The captures stay in the manifest as history.
 - **Retired data lives outside the repo.** `offdevice/data/captures_retired/`
   (git-ignored) holds the spec-v1 rehearsal captures (all `nv45s-*` tags, taken with
   the retired dummy generator and unparseable under spec v2), the smoke/bench runs,
@@ -78,20 +86,18 @@ the on-chip CMSIS-DSP port is validated against.
   hardware-resets the board via ST-LINK and captures during the firmware's boot window
   (`DUMP_NSFLASH=2`), so every snapshot is a frozen, consistent ring, and every capture
   carries a benign reboot seam (a timestamp restart).
-- **The tail collections cover the near-full-page corner, with a known texture
-  difference between them.** The live benign score climbs as a page fills and peaks in
-  the page's last ~20 records, and the original campaign's wide capture spacing
-  sampled that corner too thinly to protect it. `nv15s-lab-tail1`
-  (`offdevice/data/tail_burst.py`) banked the corner densely by capturing every ~45 s
-  through the band — but each capture resets the board, so those captures' trailing
-  records carry a repeating 15/30 timestamp-restart lattice that a steadily running
-  board never writes. `nv15s-lab-tail2` and `nv15s-lab-tail3-withsettings`
-  (`offdevice/data/tail_honest.py`) capture once per page cycle with the IDS disarmed
-  (`IDS_SCAN_ARMED 0`), so each banked tail is written in one unbroken run with
-  monotonic timestamps, exactly as deployment writes it — verified per capture by the
-  collector. Both textures train deliberately: the honest tails match steady running,
-  and the lattice tails both broaden the corner sample and resemble the post-reboot
-  pages a deployed device also produces.
+- **The tail collections cover the near-full-page corner, and only honest texture
+  trains.** The live benign score climbs as a page fills and peaks in the page's
+  last ~20 records, and the original campaign's wide capture spacing sampled that
+  corner too thinly to protect it. `nv15s-lab-tail2`, `nv15s-lab-tail3-withsettings`,
+  and `nv15s-lab-tail4` (`offdevice/data/tail_honest.py`) capture once per page
+  cycle with the IDS disarmed (`IDS_SCAN_ARMED 0`), so each banked tail is written
+  in one unbroken run with monotonic timestamps, exactly as deployment writes it —
+  verified per capture by the collector. tail4 is the deep-corner mass: 29 honest
+  tails collected one per cycle over 14.5 hours, at rotating aim depths that landed
+  write-head slots 115 through 121 (the alarm-crossing band itself), settings-quiet
+  to match the deploy build. The excluded lattice-textured alternative is described
+  above.
 - **Fill-state coverage:** the strata derive from the parsed ring. "Near-empty" means at
   most half a page of records (61 of the 122-record page). A
   fresh campaign starts with a short-interval fill pass that walks
@@ -127,12 +133,15 @@ collaborator anomaly-base captures (as-mailed md5s repeated from the committed
 `offdevice/data/collab_bases.txt`): every anomaly the collaborator returns is a
 tampered copy of one of these bases, so the model must never have trained on the file
 under the tampering, or the detection numbers would carry a memorized-base confound.
-Second, 34 of the 69 tail1 captures: the corner's training share is deliberately
-capped at half that collection, and pinning the capped half into the exam makes it
-never-trained corner exam data — the direct answer to "did the model merely memorize
-the corner captures it trained on?". The split verifies each md5-carrying pin against
-the manifest before locking the list — the file being tampered is provably the file
-excluded from training.
+Second, 6 of the 29 tail4 honest tails, chosen by a rule fixed before any scoring
+(every fifth honest tail by run number, starting at run001) so that every sampled
+corner depth appears in the exam. Because the pinned tails are honest texture the
+model never trained on, they answer the corner false-positive question directly —
+an exam property the earlier tail1-era split could not honestly claim, since its
+exam corners had near-twin captures in training and their clean scores were partly
+twin-recognition. The split verifies each md5-carrying pin against the manifest
+before locking the list — the file being tampered is provably the file excluded
+from training.
 holdout.txt also records which variants the split saw (the `# variants:` header), and
 `fit.py` refuses variants beyond that set, because their captures would train with zero
 exam coverage. `fit.py` also refuses to run without the file (or an explicit
@@ -159,39 +168,49 @@ double-weight training. (A missing file simply means no retractions.)
 
 ## The fitted model — current state
 
-The shipped one-class model is a Mahalanobis detector fitted on the 184 training
-captures (the 233 minus the 49-capture holdout): the benign mean plus a
-Ledoit-Wolf-shrunk precision matrix (shrinkage 0.026) over the 120-dimension feature
+The shipped one-class model is a Mahalanobis detector fitted on the 155 training
+captures (the 194 minus the 39-capture holdout): the benign mean plus a
+Ledoit-Wolf-shrunk precision matrix (shrinkage 0.034) over the 120-dimension feature
 vector. The artifact is `offdevice/model/artifacts/mahalanobis.npz` with a
 human-readable `.json` sidecar (both committed; the sidecar records full provenance,
 including every leave-one-out distance by capture name). The firmware constants are
 the generated `engine/nv_model_params.h` + `nv_model_testvec.h` — the artifact's
 SHA-256 is stamped in the header, and the hand-written C scorer reproduces the
-Python verdicts on both sides of the alarm line (host parity PASS on the laptop and
-on the chip; the test vectors bracket the threshold at 0.99x and 1.01x).
+Python verdicts on both sides of the alarm line (host parity PASS; the test vectors
+bracket the threshold at 0.99x and 1.01x).
 
-- **Threshold: 13.217, set at 2% benign false-positive target.** It is the
-  98th-percentile of the 184 leave-one-out distances — each capture scored by a
+- **Threshold: 13.909, set at the 1% benign false-positive target.** It is the
+  99th-percentile of the 155 leave-one-out distances — each capture scored by a
   model fitted without it; in-sample distances never set thresholds. The
-  leave-one-out distribution: min 4.376, median 7.690, p90 10.877, p95 11.547,
-  max 17.013.
+  leave-one-out distribution: min 4.093, median 7.607, p90 10.478, p95 11.651,
+  max 15.484. The 1% target (over the earlier 2% default) was chosen on live
+  benign evidence alone: on-board clean corner peaks run 12.5–13.1, above the 2%
+  candidate line (12.632), and the threshold was fixed before any anomaly was
+  scored against this model.
 - **The benign distribution is unimodal** — no fill-state or settings-state lumps, so
   the single-Gaussian model stands and the Gaussian-mixture escalation was not
-  needed. Its heavy tail is the benign ring-cycle gradient: near-full rings and
+  needed. Its upper tail is the benign ring-cycle gradient: near-full rings and
   just-rotated rings score systematically higher, a continuous and legitimate slope,
-  not a separate mode.
-- **Holdout exam, scored exactly once: 0 of 49 flagged**, inside the pre-registered
-  0–3 budget for a 2% target on a 49-capture exam. The exam includes 35 never-trained
-  tail-corner captures (they scored 4.8–10.0) — the direct answer to "did the model
-  merely memorize the corner captures it trained on?". Honest resolution: a
-  49-capture exam resolves false-positive rates only down to ~1-in-49 (~2%); the 2%
-  figure rests on the leave-one-out quantile, whose resolution is 1/184.
-- **The operating corridor is measured, and it is tight.** A 60-minute on-board soak
-  (145 scans, two full corner passes and rotations) put the live benign ceiling at
-  12.1 — the just-rotated, fullest-ring transient. The weakest caught anomaly, a
-  512 B foreign blob planted on the fullest-ring base, scores 14.545. The 13.217
-  line sits between them with ~1.1 of benign-side margin and ~1.3 of detection-side
-  margin; every other caught blob clears the line by 7.3 to 121. The
+  not a separate mode. The trained honest tails sit inside the envelope (all below
+  12.4 in leave-one-out), and the envelope's edge is set by ordinary fullest-ring
+  captures plus one recurring benign outlier (15.484).
+- **Holdout exam, scored exactly once: 0 of 39 flagged**, inside the pre-registered
+  0–1 budget for a 1% target on a 39-capture exam. The exam includes 12 tail4
+  captures the model never trained on (11 deep-corner honest tails and the one
+  positioning capture) — 6 pinned by the fixed rule plus 6 taken by the blind
+  stratified draw — and they scored 5.8 to 12.1, a
+  direct, twin-free answer to "does the model false-alarm on honest corners it
+  has never seen?". Honest resolution: a 39-capture exam resolves false-positive
+  rates only down to ~1-in-39 (~2.6%); the 1% figure rests on the leave-one-out
+  quantile, whose resolution is 1/155.
+- **The operating corridor is measured on both sides.** A 120-minute on-board soak
+  (292 scans, four full corner passes and rotations, one unbroken run with zero
+  reboots and zero alarms) put the live benign ceiling at 12.742, and a live
+  settings-unit exercise (all four display-unit states toggled through a near-full
+  page and a rotation) peaked at 12.364. The weakest caught anomaly, a 512 B
+  foreign blob planted on the fullest-ring base, scores 14.284. The 13.909 line
+  sits between them with ~1.2 of benign-side margin and 0.375 of detection-side
+  margin; every other caught blob clears the line by 5.9 to 126. The
   512 B-blob-on-fullest-ring case is the measured detection floor and is reported
   as such, not averaged away.
 
