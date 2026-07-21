@@ -67,10 +67,10 @@ from offdevice.data.collect import (
 
 # Late-slot aim points, rotated per cycle. The collection build is DISARMED
 # (no watchdog to race), so the targets sit inside the crossing band itself:
-# 120 is the very slot the live alarm fired at. Aiming past 120 risks
-# drifting over the rotation edge and wasting a cycle, so 117/119/120 varies
-# the depth while keeping a 2-slot cushion.
-TAIL_TARGETS = (117, 119, 120)
+# 114 and 120 are the very slots live alarms fired at, and 113-115 has grazed
+# the line. Aiming past 120 risks drifting over the rotation edge and wasting
+# a cycle, so the set varies depth while keeping a 2-slot cushion.
+TAIL_TARGETS = (114, 117, 119, 120)
 
 # The live alarm ramp lives in the page's last ~20 records, so a reboot seam
 # anywhere in a banked tail's last 20 records disqualifies it. The check reads
