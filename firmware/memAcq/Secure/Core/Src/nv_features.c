@@ -25,6 +25,10 @@
 #include "main.h"            /* HAL_ICACHE_Invalidate */
 #include "nv_features.h"
 #include "nv_spec.h"         /* NV_REGION_BASE + the NV_LAYOUT_LOCK assert helper */
+#include "ids_scan.h"          /* IDS_LATENCY switch */
+#if IDS_LATENCY
+#include "dwt_cycles.h"        /* DWT cycle counter for the invalidate/extract split */
+#endif
 #include "arm_math.h"          /* arm_rfft_fast_f32 (prebuilt CMSIS-DSP) */
 #include "arm_common_tables.h" /* the 512/256-point FFT tables the manual init references */
 #include "nv_feat_tables.h"    /* GENERATED window/mel/DCT/chroma + constants */
@@ -174,6 +178,20 @@ int NvFeatures_ExtractBuffer(const uint8_t *bytes, float out[NV_FEAT_DIMS])
   return 0;
 }
 
+#if IDS_LATENCY
+/* Sub-timings of the last ScanRegion (cycles): the invalidate, then the
+   feature extraction. Written every scan under a latency build; read by the
+   scan tick right after, through NvFeatures_LastLatency. */
+static uint32_t s_last_inv_cyc;
+static uint32_t s_last_feat_cyc;
+
+void NvFeatures_LastLatency(uint32_t *inv_cyc, uint32_t *feat_cyc)
+{
+  *inv_cyc  = s_last_inv_cyc;
+  *feat_cyc = s_last_feat_cyc;
+}
+#endif
+
 int NvFeatures_ScanRegion(float out[NV_FEAT_DIMS])
 {
   /* HARD REQUIREMENT -- invalidate BEFORE every scan, no exceptions. The
@@ -182,9 +200,20 @@ int NvFeatures_ScanRegion(float out[NV_FEAT_DIMS])
      cache). A stale image here is the known gotcha weaponized: the scan
      scores the innocent pre-attack bytes and a fresh implant hides. An
      invalidate failure is therefore a FAILED scan, never a benign skip. */
+#if IDS_LATENCY
+  const uint32_t lat_c0 = dwt_cycles_now();
+#endif
   if (HAL_ICACHE_Invalidate() != HAL_OK)
     return -2;
-  return NvFeatures_ExtractBuffer((const uint8_t *)NV_REGION_BASE, out);
+#if IDS_LATENCY
+  const uint32_t lat_c1 = dwt_cycles_now();
+#endif
+  const int rc = NvFeatures_ExtractBuffer((const uint8_t *)NV_REGION_BASE, out);
+#if IDS_LATENCY
+  s_last_inv_cyc  = lat_c1 - lat_c0;
+  s_last_feat_cyc = dwt_cycles_now() - lat_c1;
+#endif
+  return rc;
 }
 
 /* ===== parity harness (parity builds only) ===== */

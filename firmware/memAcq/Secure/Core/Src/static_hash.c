@@ -27,6 +27,10 @@
 
 #include "main.h"
 #include "nv_spec.h"   /* NV_NS_FLASH_BASE + NV_STATIC_SIZE: the hash ends where NV begins */
+#include "ids_scan.h"  /* IDS_LATENCY switch */
+#if IDS_LATENCY
+#include "dwt_cycles.h"
+#endif
 
 /* ===== runtime gate state (read by the secure scan tick) ===== */
 
@@ -155,11 +159,29 @@ void StaticHash_BootCheck(void)
   const int held  = button_held();
   const int blank = golden_blank();
 
+#if IDS_LATENCY
+  /* First DWT user in the boot sequence: enable the counter here, announce it
+     once, then time the 252 KB hash. This is the pure Part-1 cost; the runtime
+     pre-write check re-runs the same hash before every record write and pays
+     the same amount (plus one ICACHE invalidate, timed as Part-2's does). */
+  dwt_cycles_init();
+  printf("[LAT] DWT cycle timer live: %u MHz core (~9.1 ns/cycle; timed "
+         "regions are far under the ~39 s counter wrap)\r\n", DWT_CPU_MHZ);
+  const uint32_t lat_h0 = dwt_cycles_now();
+#endif
   if (compute_sha256(digest) != 0)
   {
     printf("[HASH] ERROR: SHA-256 compute failed\r\n");
     return;
   }
+#if IDS_LATENCY
+  {
+    const uint32_t hcyc = dwt_cycles_now() - lat_h0;
+    printf("[LAT] Part-1 static hash: %lu.%03lu us over %lu KB (%lu cyc)\r\n",
+           LAT_US(hcyc), (unsigned long)(NV_STATIC_SIZE / 1024u),
+           (unsigned long)hcyc);
+  }
+#endif
 
   if (blank || held)
   {

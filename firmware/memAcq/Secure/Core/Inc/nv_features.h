@@ -42,6 +42,13 @@ int NvFeatures_ScanRegion(float out[NV_FEAT_DIMS]);
    an int so both entry points share one check-nonzero contract). */
 int NvFeatures_ExtractBuffer(const uint8_t *bytes, float out[NV_FEAT_DIMS]);
 
+/* Sub-timings (CPU cycles) of the most recent NvFeatures_ScanRegion, exposed
+   for the latency report: *inv_cyc = the ICACHE invalidate, *feat_cyc = the
+   feature extraction (which includes reading the 4 KB NV region). DEFINED only
+   in a latency build (IDS_LATENCY, ids_scan.h) and read only by the scan tick;
+   unreferenced in a normal build. */
+void NvFeatures_LastLatency(uint32_t *inv_cyc, uint32_t *feat_cyc);
+
 #if NV_FEAT_PARITY
 /* Feed the embedded golden fixture through the chain and print the results
    for parity_check.py. Call once after USART1 is up. */
