@@ -25,7 +25,16 @@
    to deploy-build data). GOTCHA: a disarmed board has NO tamper response at
    all -- flip back to 1 and reflash Secure before any soak or demo; the
    boot banner says which build is running. */
-#define IDS_SCAN_ARMED  1
+#define IDS_SCAN_ARMED  0
+
+/* Latency instrumentation switch: 0 = normal build (no timing code emitted,
+   zero runtime overhead); 1 = a measurement build that prints a per-scan
+   Part-2 cycle breakdown (invalidate | features | score | total) plus a
+   one-time Part-1 static-hash timing, via the DWT cycle counter
+   (dwt_cycles.h). Ships 0 on every deploy/soak/demo build. Measure with
+   IDS_SCAN_ARMED 1 so the timed scan is the real armed path; the Part-1 boot
+   timing prints regardless of the arm state. */
+#define IDS_LATENCY  1
 
 /* Scan period. A parameter until the post-latency cadence decision; the same
    tick feeds the watchdog, so this must stay under IDS_WATCHDOG_PERIOD_S,

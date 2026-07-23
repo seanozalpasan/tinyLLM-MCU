@@ -38,6 +38,10 @@
 #include "nv_spec.h"       /* NV_LAYOUT_LOCK compile-time assert helper */
 #include "static_hash.h"   /* Part-1 verdict + pre-write-check heartbeat */
 
+#if IDS_LATENCY
+#include "dwt_cycles.h"    /* DWT cycle counter for the per-scan latency line */
+#endif
+
 /* 110 MHz APB1 timer clock -> 10 kHz counter; reload = period in 0.1 ms
    units. Both the /11000 and the clock it divides are build-time constants
    of this project (SystemClock_Config, APB1 DIV1). */
@@ -61,6 +65,10 @@ NV_LAYOUT_LOCK(ids_wd_ceiling, IDS_IWDG_RELOAD <= 4095u);
 
 static uint32_t scan_no;
 static IWDG_HandleTypeDef ids_iwdg;
+
+#if IDS_LATENCY
+static uint32_t s_lat_score_cyc;   /* mahal_score_d2 cost of the last score_pass */
+#endif
 
 /* Display-only: score = sqrt(d2) as thousandths, so the console reads in the
    same units as every off-device number (13.874 = the alarm line). The
@@ -129,7 +137,13 @@ static int score_pass(float *d2_out)
            (unsigned long)scan_no);
     return -1;
   }
+#if IDS_LATENCY
+  const uint32_t lat_score_c0 = dwt_cycles_now();
+#endif
   const float d2 = mahal_score_d2(feats);
+#if IDS_LATENCY
+  s_lat_score_cyc = dwt_cycles_now() - lat_score_c0;
+#endif
   if (!(d2 >= 0.0f))
   {
     /* NaN (every compare against it is false) or negative: numerically
@@ -198,6 +212,23 @@ static void run_scan(void)
   }
   clean = (verdict == 1);
 
+#if IDS_LATENCY
+  /* Per-scan Part-2 cost, printed right after its score line. Skip a failed
+     scan (verdict -1): its score_pass may have returned before timing, so the
+     stashed cycles would be stale. On an anomaly-rescan the values reflect the
+     second (deciding) pass, which is still a valid measurement. */
+  if (verdict != -1)
+  {
+    uint32_t inv_cyc = 0u, feat_cyc = 0u;
+    NvFeatures_LastLatency(&inv_cyc, &feat_cyc);
+    const uint32_t tot = inv_cyc + feat_cyc + s_lat_score_cyc;
+    printf("[LAT] scan #%lu Part-2: invalidate %lu.%03lu us | features "
+           "%lu.%03lu us | score %lu.%03lu us | total %lu.%03lu us (%lu cyc)\r\n",
+           (unsigned long)scan_no, LAT_US(inv_cyc), LAT_US(feat_cyc),
+           LAT_US(s_lat_score_cyc), LAT_US(tot), (unsigned long)tot);
+  }
+#endif
+
   /* Part-1 folds into the SAME gate: anomaly = Part-1 OR Part-2. Dirty =
      some hash check (boot or pre-write) saw a changed static region. A
      stalled heartbeat = the workload stopped running its pre-write checks
@@ -262,6 +293,9 @@ void IdsScan_Init(void)
   printf("[IDS] *** DISARMED BUILD (IDS_SCAN_ARMED 0) -- no scan, no "
          "watchdog; data collection only ***\r\n");
   return;
+#endif
+#if IDS_LATENCY
+  dwt_cycles_init();   /* idempotent; the boot-time Part-1 timing also enabled it */
 #endif
   /* Lock TIM2 to the Secure world FIRST: from here on, NonSecure reads of
      its registers are zeros and writes are ignored -- the scan schedule is
