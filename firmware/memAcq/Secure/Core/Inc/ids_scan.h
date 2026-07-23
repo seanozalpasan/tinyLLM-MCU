@@ -34,7 +34,7 @@
    (dwt_cycles.h). Ships 0 on every deploy/soak/demo build. Measure with
    IDS_SCAN_ARMED 1 so the timed scan is the real armed path; the Part-1 boot
    timing prints regardless of the arm state. */
-#define IDS_LATENCY  1
+#define IDS_LATENCY  0
 
 /* Scan period. A parameter until the post-latency cadence decision; the same
    tick feeds the watchdog, so this must stay under IDS_WATCHDOG_PERIOD_S,
