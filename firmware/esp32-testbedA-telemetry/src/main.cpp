@@ -3,7 +3,7 @@
 // Pipeline:  STM32 (USART3) --UART--> ESP32 (this) --Wi-Fi/TCP--> ncat (laptop).
 //
 // The STM32 sends ONE 24-byte telemetry frame per logged sensor record (once per record
-// period: 1 s dev / 45 s deploy) over the mikroBUS UART -- the SAME reading its NV logger
+// period: 1 s dev / 15 s deploy) over the mikroBUS UART -- the SAME reading its NV logger
 // just wrote to flash (one source, two sinks), CONVERTED to the user's display units
 // (flash keeps canonical degC/hPa; the frame says what the user asked for, and the units
 // byte says which that is). We accumulate UART bytes, find the 0xA5 0x5A magic, validate

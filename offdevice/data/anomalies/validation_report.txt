@@ -1,0 +1,49 @@
+ANOMALY VALIDATION REPORT
+seed=1515
+files=43
+
+PASS anom_blob__fill1_run001__032b.bin | base=benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin | type=foreign-blob | changed=32 | diff=0x3F2A0..0x3F2BF
+PASS anom_blob__fill1_run001__064b.bin | base=benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin | type=foreign-blob | changed=64 | diff=0x3F2A0..0x3F2DF
+PASS anom_blob__fill1_run001__128b.bin | base=benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin | type=foreign-blob | changed=128 | diff=0x3F2A0..0x3F31F
+PASS anom_blob__fill1_run001__256b.bin | base=benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin | type=foreign-blob | changed=256 | diff=0x3F2A0..0x3F39F
+PASS anom_blob__fill1_run001__512b.bin | base=benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin | type=foreign-blob | changed=512 | diff=0x3F2A0..0x3F49F
+PASS anom_blob__fill1_run006__032b.bin | base=benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin | type=foreign-blob | changed=32 | diff=0x3F200..0x3F21F
+PASS anom_blob__fill1_run006__064b.bin | base=benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin | type=foreign-blob | changed=64 | diff=0x3F200..0x3F23F
+PASS anom_blob__fill1_run006__128b.bin | base=benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin | type=foreign-blob | changed=128 | diff=0x3F200..0x3F27F
+PASS anom_blob__fill1_run006__256b.bin | base=benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin | type=foreign-blob | changed=256 | diff=0x3F200..0x3F2FF
+PASS anom_blob__fill1_run006__512b.bin | base=benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin | type=foreign-blob | changed=512 | diff=0x3F200..0x3F3FF
+PASS anom_blob__fill1_run008__032b.bin | base=benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin | type=foreign-blob | changed=32 | diff=0x3F320..0x3F33F
+PASS anom_blob__fill1_run008__064b.bin | base=benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin | type=foreign-blob | changed=64 | diff=0x3F320..0x3F35F
+PASS anom_blob__fill1_run008__128b.bin | base=benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin | type=foreign-blob | changed=128 | diff=0x3F320..0x3F39F
+PASS anom_blob__fill1_run008__256b.bin | base=benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin | type=foreign-blob | changed=256 | diff=0x3F320..0x3F41F
+PASS anom_blob__fill1_run008__512b.bin | base=benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin | type=foreign-blob | changed=512 | diff=0x3F320..0x3F51F
+PASS anom_blob__steady1_run003__032b.bin | base=benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin | type=foreign-blob | changed=32 | diff=0x3F3E0..0x3F3FF
+PASS anom_blob__steady1_run003__064b.bin | base=benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin | type=foreign-blob | changed=64 | diff=0x3F3E0..0x3F41F
+PASS anom_blob__steady1_run003__128b.bin | base=benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin | type=foreign-blob | changed=128 | diff=0x3F3E0..0x3F45F
+PASS anom_blob__steady1_run003__256b.bin | base=benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin | type=foreign-blob | changed=256 | diff=0x3F3E0..0x3F4DF
+PASS anom_blob__steady1_run003__512b.bin | base=benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin | type=foreign-blob | changed=512 | diff=0x3F3E0..0x3F5DF
+PASS anom_blob__steady1_run014__032b.bin | base=benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin | type=foreign-blob | changed=32 | diff=0x3F8E0..0x3F8FF
+PASS anom_blob__steady1_run014__064b.bin | base=benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin | type=foreign-blob | changed=64 | diff=0x3F8E0..0x3F91F
+PASS anom_blob__steady1_run014__128b.bin | base=benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin | type=foreign-blob | changed=128 | diff=0x3F8E0..0x3F95F
+PASS anom_blob__steady1_run014__256b.bin | base=benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin | type=foreign-blob | changed=256 | diff=0x3F8E0..0x3F9DF
+PASS anom_blob__steady1_run014__512b.bin | base=benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin | type=foreign-blob | changed=512 | diff=0x3F8E0..0x3FADF
+PASS anom_blob__steady1_run026__032b.bin | base=benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin | type=foreign-blob | changed=32 | diff=0x3F9A0..0x3F9BF
+PASS anom_blob__steady1_run026__064b.bin | base=benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin | type=foreign-blob | changed=64 | diff=0x3F9A0..0x3F9DF
+PASS anom_blob__steady1_run026__128b.bin | base=benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin | type=foreign-blob | changed=128 | diff=0x3F9A0..0x3FA1F
+PASS anom_blob__steady1_run026__256b.bin | base=benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin | type=foreign-blob | changed=256 | diff=0x3F9A0..0x3FA9F
+PASS anom_blob__steady1_run026__512b.bin | base=benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin | type=foreign-blob | changed=512 | diff=0x3F9A0..0x3FB9F
+PASS anom_blob__steady1_run030__032b.bin | base=benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin | type=foreign-blob | changed=32 | diff=0x3F1E0..0x3F1FF
+PASS anom_blob__steady1_run030__064b.bin | base=benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin | type=foreign-blob | changed=64 | diff=0x3F1E0..0x3F21F
+PASS anom_blob__steady1_run030__128b.bin | base=benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin | type=foreign-blob | changed=128 | diff=0x3F1E0..0x3F25F
+PASS anom_blob__steady1_run030__256b.bin | base=benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin | type=foreign-blob | changed=256 | diff=0x3F1E0..0x3F2DF
+PASS anom_blob__steady1_run030__512b.bin | base=benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin | type=foreign-blob | changed=512 | diff=0x3F1E0..0x3F3DF
+PASS anom_blob__top1_run000__032b.bin | base=benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin | type=foreign-blob | changed=32 | diff=0x3F800..0x3F81F
+PASS anom_blob__top1_run000__064b.bin | base=benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin | type=foreign-blob | changed=64 | diff=0x3F800..0x3F83F
+PASS anom_blob__top1_run000__128b.bin | base=benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin | type=foreign-blob | changed=128 | diff=0x3F800..0x3F87F
+PASS anom_blob__top1_run000__256b.bin | base=benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin | type=foreign-blob | changed=256 | diff=0x3F800..0x3F8FF
+PASS anom_blob__top1_run000__512b.bin | base=benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin | type=foreign-blob | changed=512 | diff=0x3F800..0x3F9FF
+PASS anom_corr__steady1_run026.bin | base=benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin | type=correlation-break | changed=13 | diff=0x3F074..0x3F154
+PASS anom_stride__fill1_run006__shift.bin | base=benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin | type=stride-break | changed=44 | diff=0x3F9A0..0x3F9E2
+PASS anom_stride__top1_run000__trunc.bin | base=benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin | type=stride-break | changed=8 | diff=0x3FC28..0x3FC2F
+
+RESULT: PASS

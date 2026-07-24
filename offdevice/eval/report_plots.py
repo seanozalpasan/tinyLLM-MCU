@@ -106,13 +106,14 @@ def _alarm_note(thr: float) -> str:
 def score_line(rows: list[dict[str, object]], thr: float, out: Path) -> Path:
     """One dot per capture on a single score axis; right of the dashed line = flagged."""
     fig, ax = _base_axes(9.0, 0.46 * len(rows) + 1.7)
-    rng = np.random.default_rng(0)   # presentation jitter only; nothing numeric
     top = len(rows)
     all_vals: list[float] = []
     for i, r in enumerate(rows):
         vals = np.asarray(r["values"], dtype=np.float64)
         all_vals.extend(vals.tolist())
-        y = (top - i) + rng.uniform(-0.13, 0.13, len(vals))
+        # Every dot sits exactly on its row's line: the y-position is the category
+        # (the row label), never a value -- only x (the score) carries data.
+        y = np.full(len(vals), top - i, dtype=np.float64)
         ax.scatter(vals, y, **_KIND_STYLE[str(r["kind"])])   # type: ignore[arg-type]
     ax.set_yticks([top - i for i in range(len(rows))],
                   [str(r["label"]) for r in rows])
@@ -139,9 +140,6 @@ def blob_sweep(points: list[tuple[int, float, bool]], thr: float, out: Path) -> 
     for s, d, caught in points:
         style = _KIND_STYLE["headline"] if caught else _KIND_STYLE["floor"]
         ax.scatter([s], [d], **style)   # type: ignore[arg-type]
-        if not caught:
-            ax.annotate("missed", (s, d), textcoords="offset points", xytext=(0, -14),
-                        ha="center", color=INK2, fontsize=8)
     ax.set_xscale("log", base=2)
     ax.set_xticks(sizes, [f"{s}" for s in sizes])
     ax.minorticks_off()

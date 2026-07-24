@@ -38,11 +38,33 @@ DEFAULT_ANOMALIES_DIR = Path(__file__).resolve().parents[1] / "data" / "anomalie
 DEFAULT_BASES_TXT = Path(__file__).resolve().parents[1] / "data" / "collab_bases.txt"
 MANIFEST_NAME = "anomalies_manifest.jsonl"
 
-# Delivered filenames carry the ground truth this batch: anom_<tier>__<base>__<label>.bin
-# (base like "steady1_run026" -- single underscore, unlike the capture names' double).
-NAME_RE = re.compile(r"anom_(?P<tier>\w+?)__(?P<base>\w+?_run\d+)__(?P<label>\w+)\.bin")
+# Delivered filenames carry the ground truth: anom_<tier>__<base>[__<label>].bin
+# (base like "steady1_run026" -- single underscore, unlike the capture names'
+# double). Two collaborator naming schemes are accepted, differing only in where the
+# type is written: the current one names the type in <tier> (anom_blob__ /
+# anom_corr__ / anom_stride__ ...), with <label> holding size/variant and sometimes
+# absent; the earlier one carried severity in <tier> (obvious/subtle) and the type
+# in <label>. The base-md5 and NV-only gate read the bytes, so the scheme only
+# decides labelling, never whether a file passes.
+NAME_RE = re.compile(r"anom_(?P<tier>\w+?)__(?P<base>\w+?_run\d+)(?:__(?P<label>\w+))?\.bin")
 
-# blob<N> labels are the foreign-payload size sweep; everything else is its own type.
+# A <tier> token that names the anomaly type -> its canonical type. When the tier
+# is not one of these it is severity, and the type is read from <label> instead.
+_TIER_TYPE = {
+    "blob": "foreign_blob",
+    "corr": "correlation_break",
+    "stride": "stride_break",
+    "journal": "journal_tamper",
+    "erase": "region_erase",
+    "mimic": "settings_mimic",
+    "defaults": "defaults_downgrade",
+    "inrange": "in_range_value",
+    "oor": "out_of_range_value",
+    "ts": "nonmonotonic_ts",
+}
+
+# blob<N> labels are the earlier scheme's foreign-payload size sweep (current
+# deliveries use the anom_blob__ tier); the size itself is measured from the diff.
 _BLOB_RE = re.compile(r"blob(\d+)")
 
 # Audit detail stored per manifest entry is capped: a whole-region tamper diffs as
@@ -105,7 +127,7 @@ def check_file(path: Path, bases: dict[str, tuple[str, str]],
     """One delivered file -> (manifest entry, None) or (None, fix-it reason)."""
     m = NAME_RE.fullmatch(path.name)
     if m is None:
-        return None, "filename does not follow anom_<tier>__<base>__<label>.bin"
+        return None, "filename does not follow anom_<tier>__<base>[__<label>].bin"
     data = path.read_bytes()
     if len(data) != DUMP_SIZE:
         return None, f"size {len(data)} != {DUMP_SIZE} (whole 256 KB dump required)"
@@ -123,14 +145,23 @@ def check_file(path: Path, bases: dict[str, tuple[str, str]],
     if not runs:
         return None, "byte-identical to its base -- no tampering present"
 
+    # Type comes from <tier> when it names one (current scheme), else from <label>,
+    # which the earlier scheme set to the type (blob<size> being a foreign blob).
     label = m["label"]
-    blob = _BLOB_RE.fullmatch(label)
+    if m["tier"] in _TIER_TYPE:
+        typ = _TIER_TYPE[m["tier"]]
+    elif label and _BLOB_RE.fullmatch(label):
+        typ = "foreign_blob"
+    elif label:
+        typ = label
+    else:
+        return None, "cannot determine type: unrecognized tier and no label"
     entry: dict[str, object] = {
         "file": path.name,
         "md5": hashlib.md5(data).hexdigest(),
         "tier": m["tier"],
-        "label": label,
-        "type": "foreign_blob" if blob else label,
+        "label": label or "",
+        "type": typ,
         "base": base_name,
         "base_md5": base_md5,
         "nv_changed_bytes": int(sum(n for _, n in runs)),

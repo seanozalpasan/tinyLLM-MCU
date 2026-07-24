@@ -49,6 +49,580 @@
       "base_flagged": false
     },
     {
+      "file": "anom_blob__fill1_run001__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 6.212521466102323,
+      "d": 8.627135241587643,
+      "delta": 2.4146137754853205,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run001__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 6.212521466102323,
+      "d": 11.134031368052572,
+      "delta": 4.921509901950249,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run001__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 6.212521466102323,
+      "d": 9.54667256427273,
+      "delta": 3.334151098170408,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run001__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 6.212521466102323,
+      "d": 39.24444472399747,
+      "delta": 33.031923257895144,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run001__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run001__20260711T211442.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 6.212521466102323,
+      "d": 72.68780418771912,
+      "delta": 66.47528272161681,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run006__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 6.415291977454166,
+      "d": 6.713179213021379,
+      "delta": 0.2978872355672131,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run006__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 6.415291977454166,
+      "d": 6.833985682211302,
+      "delta": 0.4186937047571355,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run006__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 6.415291977454166,
+      "d": 6.600479431326806,
+      "delta": 0.1851874538726399,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run006__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 6.415291977454166,
+      "d": 7.8785859793829465,
+      "delta": 1.4632940019287801,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run006__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 6.415291977454166,
+      "d": 19.830361649536012,
+      "delta": 13.415069672081845,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run008__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 6.252713963325275,
+      "d": 6.475325385142957,
+      "delta": 0.22261142181768268,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run008__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 6.252713963325275,
+      "d": 7.958003332184319,
+      "delta": 1.7052893688590443,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run008__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 6.252713963325275,
+      "d": 7.568851994447178,
+      "delta": 1.3161380311219038,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run008__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 6.252713963325275,
+      "d": 8.095142927706043,
+      "delta": 1.842428964380768,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__fill1_run008__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run008__20260711T221804.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 6.252713963325275,
+      "d": 11.093515880884013,
+      "delta": 4.840801917558738,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run003__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 8.140123138169338,
+      "d": 9.449288022715228,
+      "delta": 1.3091648845458899,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run003__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 8.140123138169338,
+      "d": 9.304982407469565,
+      "delta": 1.1648592693002264,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run003__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 8.140123138169338,
+      "d": 11.453269139511214,
+      "delta": 3.3131460013418756,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run003__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 8.140123138169338,
+      "d": 31.56456534071078,
+      "delta": 23.424442202541442,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run003__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run003__20260712T003256.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 8.140123138169338,
+      "d": 49.56311044266012,
+      "delta": 41.42298730449078,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run014__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 8.231963168572781,
+      "d": 5.353479702315316,
+      "delta": -2.8784834662574648,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run014__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 8.231963168572781,
+      "d": 5.850972021084814,
+      "delta": -2.3809911474879666,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run014__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 8.231963168572781,
+      "d": 5.566376980381297,
+      "delta": -2.665586188191484,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run014__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 8.231963168572781,
+      "d": 7.42089365443398,
+      "delta": -0.8110695141388007,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run014__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run014__20260712T075344.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 8.231963168572781,
+      "d": 35.113799503992894,
+      "delta": 26.88183633542011,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run026__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 11.70630156460837,
+      "d": 12.633430585480498,
+      "delta": 0.9271290208721279,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run026__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 11.70630156460837,
+      "d": 12.089427254578496,
+      "delta": 0.3831256899701252,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run026__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 11.70630156460837,
+      "d": 12.142136934110436,
+      "delta": 0.43583536950206536,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run026__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 11.70630156460837,
+      "d": 12.515359238235767,
+      "delta": 0.8090576736273967,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run026__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 11.70630156460837,
+      "d": 14.284425025309123,
+      "delta": 2.578123460700752,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run030__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 7.6800927539953125,
+      "d": 9.747424456835573,
+      "delta": 2.06733170284026,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run030__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 7.6800927539953125,
+      "d": 9.777518415328156,
+      "delta": 2.097425661332844,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run030__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 7.6800927539953125,
+      "d": 12.152852685639157,
+      "delta": 4.472759931643845,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run030__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 7.6800927539953125,
+      "d": 36.06638364389059,
+      "delta": 28.386290889895278,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__steady1_run030__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run030__20260712T213216.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 7.6800927539953125,
+      "d": 69.69517488054765,
+      "delta": 62.01508212655234,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__top1_run000__032b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_32B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin",
+      "nv_changed_bytes": 32,
+      "base_d": 9.377304565534551,
+      "d": 10.825182227787783,
+      "delta": 1.447877662253232,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__top1_run000__064b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_64B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin",
+      "nv_changed_bytes": 64,
+      "base_d": 9.377304565534551,
+      "d": 10.548076250181001,
+      "delta": 1.17077168464645,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__top1_run000__128b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_128B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin",
+      "nv_changed_bytes": 128,
+      "base_d": 9.377304565534551,
+      "d": 11.55571904941082,
+      "delta": 2.178414483876269,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__top1_run000__256b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_256B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin",
+      "nv_changed_bytes": 256,
+      "base_d": 9.377304565534551,
+      "d": 10.75407150388792,
+      "delta": 1.3767669383533683,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_blob__top1_run000__512b.bin",
+      "type": "foreign_blob",
+      "type_key": "foreign_blob_512B",
+      "tier": "blob",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin",
+      "nv_changed_bytes": 512,
+      "base_d": 9.377304565534551,
+      "d": 20.593827256443852,
+      "delta": 11.2165226909093,
+      "flagged": true,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_corr__steady1_run026.bin",
+      "type": "correlation_break",
+      "type_key": "correlation_break",
+      "tier": "corr",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
+      "nv_changed_bytes": 13,
+      "base_d": 11.70630156460837,
+      "d": 11.70231776654347,
+      "delta": -0.003983798064901123,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
       "file": "anom_obvious__fill1_run001__blob1024.bin",
       "type": "foreign_blob",
       "type_key": "foreign_blob_1024B",
@@ -59,20 +633,6 @@
       "base_d": 6.212521466102323,
       "d": 105.38456880744731,
       "delta": 99.17204734134499,
-      "flagged": true,
-      "base_flagged": false
-    },
-    {
-      "file": "anom_obvious__fill1_run006__blob512.bin",
-      "type": "foreign_blob",
-      "type_key": "foreign_blob_512B",
-      "tier": "obvious",
-      "bucket": "headline",
-      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
-      "nv_changed_bytes": 512,
-      "base_d": 6.415291977454166,
-      "d": 19.830361649536012,
-      "delta": 13.415069672081845,
       "flagged": true,
       "base_flagged": false
     },
@@ -119,20 +679,6 @@
       "base_flagged": false
     },
     {
-      "file": "anom_obvious__steady1_run026__blob512.bin",
-      "type": "foreign_blob",
-      "type_key": "foreign_blob_512B",
-      "tier": "obvious",
-      "bucket": "headline",
-      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
-      "nv_changed_bytes": 512,
-      "base_d": 11.70630156460837,
-      "d": 14.284425025309123,
-      "delta": 2.578123460700752,
-      "flagged": true,
-      "base_flagged": false
-    },
-    {
       "file": "anom_obvious__steady1_run030__blob1024.bin",
       "type": "foreign_blob",
       "type_key": "foreign_blob_1024B",
@@ -147,17 +693,31 @@
       "base_flagged": false
     },
     {
-      "file": "anom_obvious__top1_run000__blob512.bin",
-      "type": "foreign_blob",
-      "type_key": "foreign_blob_512B",
-      "tier": "obvious",
+      "file": "anom_stride__fill1_run006__shift.bin",
+      "type": "stride_break",
+      "type_key": "stride_break",
+      "tier": "stride",
+      "bucket": "headline",
+      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
+      "nv_changed_bytes": 44,
+      "base_d": 6.415291977454166,
+      "d": 6.645736466835397,
+      "delta": 0.23044448938123097,
+      "flagged": false,
+      "base_flagged": false
+    },
+    {
+      "file": "anom_stride__top1_run000__trunc.bin",
+      "type": "stride_break",
+      "type_key": "stride_break",
+      "tier": "stride",
       "bucket": "headline",
       "base": "benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin",
-      "nv_changed_bytes": 512,
+      "nv_changed_bytes": 8,
       "base_d": 9.377304565534551,
-      "d": 20.593827256443852,
-      "delta": 11.2165226909093,
-      "flagged": true,
+      "d": 9.094068151708445,
+      "delta": -0.2832364138261063,
+      "flagged": false,
       "base_flagged": false
     },
     {
@@ -171,20 +731,6 @@
       "base_d": 6.212521466102323,
       "d": 7.593001071269723,
       "delta": 1.3804796051674,
-      "flagged": false,
-      "base_flagged": false
-    },
-    {
-      "file": "anom_subtle__fill1_run006__stride_break.bin",
-      "type": "stride_break",
-      "type_key": "stride_break",
-      "tier": "subtle",
-      "bucket": "headline",
-      "base": "benign__tbA__nv15s-lab-fill1__run006__20260711T215958.bin",
-      "nv_changed_bytes": 44,
-      "base_d": 6.415291977454166,
-      "d": 6.645736466835397,
-      "delta": 0.23044448938123097,
       "flagged": false,
       "base_flagged": false
     },
@@ -203,20 +749,6 @@
       "base_flagged": false
     },
     {
-      "file": "anom_subtle__steady1_run026__correlation_break.bin",
-      "type": "correlation_break",
-      "type_key": "correlation_break",
-      "tier": "subtle",
-      "bucket": "headline",
-      "base": "benign__tbA__nv15s-lab-steady1__run026__20260712T155435.bin",
-      "nv_changed_bytes": 13,
-      "base_d": 11.70630156460837,
-      "d": 11.70231776654347,
-      "delta": -0.003983798064901123,
-      "flagged": false,
-      "base_flagged": false
-    },
-    {
       "file": "anom_subtle__steady1_run030__nonmonotonic_ts.bin",
       "type": "nonmonotonic_ts",
       "type_key": "nonmonotonic_ts",
@@ -229,20 +761,6 @@
       "delta": 0.01461314604735886,
       "flagged": false,
       "base_flagged": false
-    },
-    {
-      "file": "anom_subtle__top1_run000__stride_break.bin",
-      "type": "stride_break",
-      "type_key": "stride_break",
-      "tier": "subtle",
-      "bucket": "headline",
-      "base": "benign__tbA__nv15s-lab-top1__run000__20260712T172439.bin",
-      "nv_changed_bytes": 8,
-      "base_d": 9.377304565534551,
-      "d": 9.094068151708445,
-      "delta": -0.2832364138261063,
-      "flagged": false,
-      "base_flagged": false
     }
   ],
   "per_type": {
@@ -251,32 +769,52 @@
       "n": 2,
       "caught": 0
     },
+    "foreign_blob_32B": {
+      "bucket": "headline",
+      "n": 8,
+      "caught": 0
+    },
+    "foreign_blob_64B": {
+      "bucket": "headline",
+      "n": 8,
+      "caught": 0
+    },
+    "foreign_blob_128B": {
+      "bucket": "headline",
+      "n": 8,
+      "caught": 0
+    },
+    "foreign_blob_256B": {
+      "bucket": "headline",
+      "n": 8,
+      "caught": 3
+    },
+    "foreign_blob_512B": {
+      "bucket": "headline",
+      "n": 9,
+      "caught": 8
+    },
+    "correlation_break": {
+      "bucket": "headline",
+      "n": 1,
+      "caught": 0
+    },
     "foreign_blob_1024B": {
       "bucket": "headline",
       "n": 4,
       "caught": 4
-    },
-    "foreign_blob_512B": {
-      "bucket": "headline",
-      "n": 4,
-      "caught": 4
-    },
-    "foreign_blob_8B": {
-      "bucket": "headline",
-      "n": 1,
-      "caught": 0
     },
     "stride_break": {
       "bucket": "headline",
       "n": 2,
       "caught": 0
     },
-    "out_of_range_value": {
+    "foreign_blob_8B": {
       "bucket": "headline",
       "n": 1,
       "caught": 0
     },
-    "correlation_break": {
+    "out_of_range_value": {
       "bucket": "headline",
       "n": 1,
       "caught": 0
@@ -288,12 +826,12 @@
     }
   },
   "headline": {
-    "n": 14,
-    "caught": 8,
-    "auc": 0.823963133640553,
+    "n": 51,
+    "caught": 15,
+    "auc": 0.752561669829222,
     "operating_point": {
       "false_alarm_rate": 0.0064516129032258064,
-      "detection_rate": 0.5714285714285714
+      "detection_rate": 0.29411764705882354
     }
   },
   "roc_points": [
@@ -307,631 +845,779 @@
     ],
     [
       0.0,
-      0.07142857142857142
+      0.0196078431372549
     ],
     [
       0.0,
-      0.14285714285714285
+      0.0392156862745098
     ],
     [
       0.0,
-      0.21428571428571427
+      0.058823529411764705
     ],
     [
       0.0,
-      0.2857142857142857
+      0.0784313725490196
     ],
     [
       0.0,
-      0.35714285714285715
+      0.09803921568627451
     ],
     [
       0.0,
-      0.42857142857142855
+      0.11764705882352941
     ],
     [
       0.0,
-      0.5
+      0.13725490196078433
+    ],
+    [
+      0.0,
+      0.1568627450980392
+    ],
+    [
+      0.0,
+      0.17647058823529413
+    ],
+    [
+      0.0,
+      0.19607843137254902
+    ],
+    [
+      0.0,
+      0.21568627450980393
+    ],
+    [
+      0.0,
+      0.23529411764705882
+    ],
+    [
+      0.0,
+      0.2549019607843137
+    ],
+    [
+      0.0,
+      0.27450980392156865
     ],
     [
       0.0064516129032258064,
-      0.5
+      0.27450980392156865
     ],
     [
       0.0064516129032258064,
-      0.5714285714285714
+      0.29411764705882354
     ],
     [
       0.012903225806451613,
-      0.5714285714285714
+      0.29411764705882354
     ],
     [
       0.01935483870967742,
-      0.5714285714285714
+      0.29411764705882354
+    ],
+    [
+      0.01935483870967742,
+      0.3137254901960784
     ],
     [
       0.025806451612903226,
-      0.5714285714285714
+      0.3137254901960784
+    ],
+    [
+      0.025806451612903226,
+      0.3333333333333333
     ],
     [
       0.03225806451612903,
-      0.5714285714285714
+      0.3333333333333333
+    ],
+    [
+      0.03225806451612903,
+      0.35294117647058826
+    ],
+    [
+      0.03225806451612903,
+      0.37254901960784315
+    ],
+    [
+      0.03225806451612903,
+      0.39215686274509803
     ],
     [
       0.03870967741935484,
-      0.5714285714285714
+      0.39215686274509803
     ],
     [
       0.04516129032258064,
-      0.5714285714285714
+      0.39215686274509803
     ],
     [
       0.04516129032258064,
-      0.6428571428571429
+      0.4117647058823529
     ],
     [
       0.05161290322580645,
-      0.6428571428571429
+      0.4117647058823529
+    ],
+    [
+      0.05161290322580645,
+      0.43137254901960786
+    ],
+    [
+      0.05161290322580645,
+      0.45098039215686275
     ],
     [
       0.05806451612903226,
-      0.6428571428571429
+      0.45098039215686275
     ],
     [
       0.06451612903225806,
-      0.6428571428571429
+      0.45098039215686275
     ],
     [
       0.07096774193548387,
-      0.6428571428571429
+      0.45098039215686275
+    ],
+    [
+      0.07096774193548387,
+      0.47058823529411764
+    ],
+    [
+      0.07096774193548387,
+      0.49019607843137253
     ],
     [
       0.07741935483870968,
-      0.6428571428571429
+      0.49019607843137253
+    ],
+    [
+      0.07741935483870968,
+      0.5098039215686274
+    ],
+    [
+      0.07741935483870968,
+      0.5294117647058824
     ],
     [
       0.08387096774193549,
-      0.6428571428571429
+      0.5294117647058824
     ],
     [
       0.09032258064516129,
-      0.6428571428571429
+      0.5294117647058824
     ],
     [
       0.0967741935483871,
-      0.6428571428571429
+      0.5294117647058824
+    ],
+    [
+      0.0967741935483871,
+      0.5490196078431373
     ],
     [
       0.1032258064516129,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.10967741935483871,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.11612903225806452,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.12258064516129032,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.12903225806451613,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.13548387096774195,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.14193548387096774,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.14838709677419354,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.15483870967741936,
-      0.6428571428571429
+      0.5490196078431373
     ],
     [
       0.16129032258064516,
-      0.6428571428571429
+      0.5490196078431373
+    ],
+    [
+      0.16129032258064516,
+      0.5686274509803921
     ],
     [
       0.16774193548387098,
-      0.6428571428571429
+      0.5686274509803921
+    ],
+    [
+      0.16774193548387098,
+      0.5882352941176471
     ],
     [
       0.17419354838709677,
-      0.6428571428571429
+      0.5882352941176471
     ],
     [
       0.18064516129032257,
-      0.6428571428571429
+      0.5882352941176471
     ],
     [
       0.1870967741935484,
-      0.6428571428571429
+      0.5882352941176471
     ],
     [
       0.1935483870967742,
-      0.6428571428571429
+      0.5882352941176471
     ],
     [
       0.2,
-      0.6428571428571429
+      0.5882352941176471
+    ],
+    [
+      0.2,
+      0.6078431372549019
     ],
     [
       0.2064516129032258,
-      0.6428571428571429
+      0.6078431372549019
     ],
     [
       0.2129032258064516,
-      0.6428571428571429
+      0.6078431372549019
     ],
     [
       0.21935483870967742,
-      0.6428571428571429
+      0.6078431372549019
+    ],
+    [
+      0.21935483870967742,
+      0.6274509803921569
     ],
     [
       0.22580645161290322,
-      0.6428571428571429
+      0.6274509803921569
     ],
     [
       0.23225806451612904,
-      0.6428571428571429
+      0.6274509803921569
     ],
     [
       0.23870967741935484,
-      0.6428571428571429
+      0.6274509803921569
     ],
     [
       0.24516129032258063,
-      0.6428571428571429
+      0.6274509803921569
+    ],
+    [
+      0.24516129032258063,
+      0.6470588235294118
     ],
     [
       0.25161290322580643,
-      0.6428571428571429
+      0.6470588235294118
     ],
     [
       0.25806451612903225,
-      0.6428571428571429
+      0.6470588235294118
     ],
     [
       0.2645161290322581,
-      0.6428571428571429
+      0.6470588235294118
     ],
     [
       0.2709677419354839,
-      0.6428571428571429
+      0.6470588235294118
     ],
     [
       0.2709677419354839,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.27741935483870966,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.2838709677419355,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.2903225806451613,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.2967741935483871,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.3032258064516129,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.3096774193548387,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.3161290322580645,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.3225806451612903,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.32903225806451614,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.33548387096774196,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.3419354838709677,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.34838709677419355,
-      0.7142857142857143
+      0.6666666666666666
     ],
     [
       0.3548387096774194,
-      0.7142857142857143
+      0.6666666666666666
+    ],
+    [
+      0.3548387096774194,
+      0.6862745098039216
     ],
     [
       0.36129032258064514,
-      0.7142857142857143
+      0.6862745098039216
     ],
     [
       0.36774193548387096,
-      0.7142857142857143
+      0.6862745098039216
     ],
     [
       0.3741935483870968,
-      0.7142857142857143
+      0.6862745098039216
     ],
     [
       0.38064516129032255,
-      0.7142857142857143
+      0.6862745098039216
     ],
     [
       0.3870967741935484,
-      0.7142857142857143
+      0.6862745098039216
     ],
     [
       0.3935483870967742,
-      0.7142857142857143
+      0.6862745098039216
     ],
     [
       0.4,
-      0.7142857142857143
+      0.6862745098039216
     ],
     [
       0.4,
-      0.7857142857142857
+      0.7058823529411765
     ],
     [
       0.4064516129032258,
-      0.7857142857142857
+      0.7058823529411765
     ],
     [
       0.4129032258064516,
-      0.7857142857142857
+      0.7058823529411765
     ],
     [
       0.41935483870967744,
-      0.7857142857142857
+      0.7058823529411765
+    ],
+    [
+      0.41935483870967744,
+      0.7254901960784313
     ],
     [
       0.4258064516129032,
-      0.7857142857142857
+      0.7254901960784313
     ],
     [
       0.432258064516129,
-      0.7857142857142857
+      0.7254901960784313
     ],
     [
       0.43870967741935485,
-      0.7857142857142857
+      0.7254901960784313
     ],
     [
       0.44516129032258067,
-      0.7857142857142857
+      0.7254901960784313
     ],
     [
       0.45161290322580644,
-      0.7857142857142857
+      0.7254901960784313
     ],
     [
       0.45806451612903226,
-      0.7857142857142857
+      0.7254901960784313
+    ],
+    [
+      0.45806451612903226,
+      0.7450980392156863
     ],
     [
       0.4645161290322581,
-      0.7857142857142857
+      0.7450980392156863
+    ],
+    [
+      0.4645161290322581,
+      0.7647058823529411
     ],
     [
       0.47096774193548385,
-      0.7857142857142857
+      0.7647058823529411
     ],
     [
       0.4774193548387097,
-      0.7857142857142857
+      0.7647058823529411
     ],
     [
       0.4774193548387097,
-      0.8571428571428571
+      0.7843137254901961
     ],
     [
       0.4838709677419355,
-      0.8571428571428571
+      0.7843137254901961
     ],
     [
       0.49032258064516127,
-      0.8571428571428571
+      0.7843137254901961
     ],
     [
       0.4967741935483871,
-      0.8571428571428571
+      0.7843137254901961
     ],
     [
       0.5032258064516129,
-      0.8571428571428571
+      0.7843137254901961
     ],
     [
       0.5032258064516129,
-      0.9285714285714286
+      0.803921568627451
     ],
     [
       0.5096774193548387,
-      0.9285714285714286
+      0.803921568627451
     ],
     [
       0.5161290322580645,
-      0.9285714285714286
+      0.803921568627451
+    ],
+    [
+      0.5161290322580645,
+      0.8235294117647058
     ],
     [
       0.5225806451612903,
-      0.9285714285714286
+      0.8235294117647058
     ],
     [
       0.5290322580645161,
-      0.9285714285714286
+      0.8235294117647058
     ],
     [
       0.535483870967742,
-      0.9285714285714286
+      0.8235294117647058
     ],
     [
       0.5419354838709678,
-      0.9285714285714286
+      0.8235294117647058
     ],
     [
       0.5483870967741935,
-      0.9285714285714286
+      0.8235294117647058
+    ],
+    [
+      0.5483870967741935,
+      0.8431372549019608
     ],
     [
       0.5548387096774193,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.5612903225806452,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.567741935483871,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.5741935483870968,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.5806451612903226,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.5870967741935483,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.5935483870967742,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6064516129032258,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6129032258064516,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6193548387096774,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6258064516129033,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.632258064516129,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6387096774193548,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6451612903225806,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6516129032258065,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6580645161290323,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6645161290322581,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6709677419354839,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6774193548387096,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6838709677419355,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6903225806451613,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.6967741935483871,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.7032258064516129,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.7096774193548387,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.7161290322580646,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.7225806451612903,
-      0.9285714285714286
+      0.8431372549019608
     ],
     [
       0.7290322580645161,
-      0.9285714285714286
+      0.8431372549019608
+    ],
+    [
+      0.7290322580645161,
+      0.8627450980392157
     ],
     [
       0.7354838709677419,
-      0.9285714285714286
+      0.8627450980392157
     ],
     [
       0.7419354838709677,
-      0.9285714285714286
+      0.8627450980392157
     ],
     [
       0.7483870967741936,
-      0.9285714285714286
+      0.8627450980392157
     ],
     [
       0.7548387096774194,
-      0.9285714285714286
+      0.8627450980392157
+    ],
+    [
+      0.7548387096774194,
+      0.8823529411764706
     ],
     [
       0.7612903225806451,
-      0.9285714285714286
+      0.8823529411764706
     ],
     [
       0.7612903225806451,
-      1.0
+      0.9019607843137255
+    ],
+    [
+      0.7612903225806451,
+      0.9215686274509803
     ],
     [
       0.7677419354838709,
-      1.0
+      0.9215686274509803
     ],
     [
       0.7741935483870968,
-      1.0
+      0.9215686274509803
+    ],
+    [
+      0.7741935483870968,
+      0.9411764705882353
     ],
     [
       0.7806451612903226,
-      1.0
+      0.9411764705882353
     ],
     [
       0.7870967741935484,
-      1.0
+      0.9411764705882353
     ],
     [
       0.7935483870967742,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8064516129032258,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8129032258064516,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8193548387096774,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8258064516129032,
-      1.0
+      0.9411764705882353
     ],
     [
       0.832258064516129,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8387096774193549,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8451612903225807,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8516129032258064,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8580645161290322,
-      1.0
+      0.9411764705882353
     ],
     [
       0.864516129032258,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8709677419354839,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8774193548387097,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8838709677419355,
-      1.0
+      0.9411764705882353
     ],
     [
       0.8903225806451613,
-      1.0
+      0.9411764705882353
+    ],
+    [
+      0.8903225806451613,
+      0.9607843137254902
     ],
     [
       0.896774193548387,
-      1.0
+      0.9607843137254902
     ],
     [
       0.9032258064516129,
-      1.0
+      0.9607843137254902
     ],
     [
       0.9096774193548387,
-      1.0
+      0.9607843137254902
     ],
     [
       0.9161290322580645,
-      1.0
+      0.9607843137254902
     ],
     [
       0.9225806451612903,
-      1.0
+      0.9607843137254902
+    ],
+    [
+      0.9225806451612903,
+      0.9803921568627451
+    ],
+    [
+      0.9290322580645162,
+      0.9803921568627451
     ],
     [
       0.9290322580645162,

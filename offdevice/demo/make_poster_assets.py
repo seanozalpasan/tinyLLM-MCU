@@ -31,10 +31,13 @@ EVAL_JSON = REPO_ROOT / "offdevice" / "eval" / "results" / "eval_results.json"
 OUT_DIR = REPO_ROOT / "docs" / "demo_assets"
 DPI = 300
 
-# Measured live benign ceiling + the soak that measured it. These two update
-# TOGETHER after any longer verification soak (e.g. the overnight run) -- edit
-# here, re-run this script, done. Everything else is derived from the eval
-# results file, so a collaborator redelivery re-renders with no code change.
+# Measured live benign ceiling + the soak that measured it. The 14 h endurance
+# soak does NOT replace these: it failed its pre-registered bar (corner false
+# alarms on a young ring), so the pre-registered clean 120-min soak stays the
+# corridor's benign marker, and the endurance run is quoted separately on the
+# poster as 'longest alarm-free stretch: 4.0 h / 587 scans (ceiling 13.742)'.
+# Everything else is derived from the eval results file, so a collaborator
+# redelivery re-renders with no code change.
 LIVE_CEILING = 12.742
 SOAK_LABEL = "120-minute verification soak"
 
@@ -109,16 +112,18 @@ def corridor(skin: dict[str, str], thr: float, base_lo: float,
 # ---- figure 2: payload-size sweep ---------------------------------------------
 def blob_sweep(skin: dict[str, str], thr: float, rows: list[dict[str, object]],
                base_lo: float, base_hi: float) -> Path:
-    """Bytes changed vs score for all 16 collaborator attacks; the region
-    under the alarm line is the deliberate micro-tamper blind spot."""
+    """Bytes changed vs score for every collaborator attack; the region under
+    the alarm line is the deliberate small-payload / micro-tamper blind spot."""
     fig, ax = _axes(skin, 9.5, 6.4)
     ax.set_xscale("log", base=2)
     ax.set_yscale("log")
     ax.grid(color=skin["grid"], lw=0.8)
 
     ax.axhspan(base_lo, base_hi, color=skin["good"], alpha=0.16)
-    ax.text(0.985, base_hi * 0.96, "untampered captures score in this band",
-            transform=ax.get_yaxis_transform(), ha="right", va="top",
+    # Labelled from the empty top-left corner -- the band itself is crowded with
+    # missed-tamper dots; the green text ties the label to the green band.
+    ax.text(0.02, 0.97, "untampered captures score in the green band",
+            transform=ax.transAxes, ha="left", va="top",
             color=skin["good"], fontsize=11.5)
     ax.axhline(thr, color=skin["alarm"], lw=2.5)
     ax.text(0.985, thr * 1.04, f"ALARM LINE {thr:.3f}",
@@ -139,15 +144,15 @@ def blob_sweep(skin: dict[str, str], thr: float, rows: list[dict[str, object]],
                   fontsize=13)
     ax.set_ylabel("anomaly score (log scale)", color=skin["ink"], fontsize=13)
     # Behavior legend lives in the subtitle, where no dot can collide with it;
-    # two stacked lines so the canvas never grows wider than the plot. Counts
-    # are derived, so a collaborator redelivery re-renders without edits.
+    # two stacked lines so the canvas never grows wider than the plot. The count
+    # is derived; the size bands are the measured finding (RESULTS.md), stated
+    # rather than derived because a bare "largest miss" would mislabel the single
+    # 512 B miss as a micro-tamper when it is just a placement-dependent gap.
     n_caught = sum(bool(r["flagged"]) for r in rows)
-    miss_max = max((int(r["nv_changed_bytes"]) for r in rows
-                    if not bool(r["flagged"])), default=0)
     ax.set_title(f"All {len(rows)} real attacks: how big before the model "
                  "sees it?", loc="left", color=skin["ink"], fontsize=18, pad=52)
-    ax.text(0, 1.02, f"solid = caught (n={n_caught})\nhollow = missed by design "
-            f"(micro-tampers <= {miss_max} B belong to firmware rule-checks)",
+    ax.text(0, 1.02, f"solid = caught (n={n_caught})   hollow = missed\n"
+            "reliable ≥512 B · split at 256 B · ≤128 B missed by design",
             transform=ax.transAxes, color=skin["ink"], fontsize=11.5,
             va="bottom")
     return _save(fig, skin, "blob_sweep")

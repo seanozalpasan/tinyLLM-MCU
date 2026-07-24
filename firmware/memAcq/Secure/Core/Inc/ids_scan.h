@@ -25,7 +25,7 @@
    to deploy-build data). GOTCHA: a disarmed board has NO tamper response at
    all -- flip back to 1 and reflash Secure before any soak or demo; the
    boot banner says which build is running. */
-#define IDS_SCAN_ARMED  0
+#define IDS_SCAN_ARMED  1
 
 /* Latency instrumentation switch: 0 = normal build (no timing code emitted,
    zero runtime overhead); 1 = a measurement build that prints a per-scan
