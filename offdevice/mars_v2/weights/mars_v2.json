@@ -1,0 +1,10 @@
+{
+  "model": "mars_v2.keras",
+  "sha256": "a32a10324c1cfb20282e79a98ba2963c1c891f20845c7f2be7cdbd7ad79353f1",
+  "threshold": 0.406236857175827,
+  "threshold_method": "quantile(val-benign p(anom), 1-0.02, 'higher') over the stratified sandbox validation split (never fit on)",
+  "architecture": "grid_struct: MARS conv stack over nv_grid_v2 + 30-dim structural aux branch (build_mars_v2)",
+  "inputs": ["nv_grid_v2 (244,5,1)", "nv_struct_features (30,)"],
+  "training": "seeded sandbox (seed 4242): 82 benign + 36 benign-faults-as-benign + 859 synthetic anomalies over non-holdout bases; spec-plausible mimics excluded from the anomalous label",
+  "provenance": "trained 2026-07-18; same bytes as offdevice/cnn_quant/model/mars_grid_ogcnn_v2.keras"
+}

@@ -17,3 +17,26 @@ engine/nv_parity.exe
 # Retired captures (v1 rehearsal, smoke runs, quarantined duplicates) -- laptop-local.
 # captures/ itself IS tracked: the committed training+holdout set + manifest.
 offdevice/data/captures_retired/
+
+# cnn_quant generated artifacts -- rerun the pipeline to regenerate.
+offdevice/cnn_quant/model/*.keras
+offdevice/cnn_quant/model/norm_stats.npz
+offdevice/cnn_quant/model/quantized/
+offdevice/cnn_quant/model/export/
+offdevice/cnn_quant/data/metadata.csv
+offdevice/cnn_quant/data/wavs/
+
+# Exam + hw-bringup generated/local artifacts. The battery/fault/sandbox bins are
+# seeded-generator outputs pinned by committed sha256 manifests (regenerate via
+# gen_battery.py / gen_faults.py); hw_backup is machine-local board-state safety
+# copies; model/ospi is blob_export.py output (the attest header's canonical copy
+# lives in firmware/memAcq/Secure/Core/Inc); live-sanity bins stay laptop-local,
+# their manifest is tracked.
+offdevice/cnn_quant/data/synthetic_anomalies/
+offdevice/cnn_quant/model/ospi/
+offdevice/exam/data/battery/*.bin
+offdevice/exam/data/benign_faults/*.bin
+offdevice/exam/data/sandbox_ogmars/
+offdevice/exam/out/
+offdevice/exam/hw_backup/
+offdevice/exam/live_sanity/*.bin
